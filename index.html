@@ -42,6 +42,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:6px
 header h1{font-size:20px;margin:0;font-weight:700}
 .iconbtn{background:var(--chip);border:none;border-radius:12px;width:40px;height:40px;
   font-size:18px;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.hbtns{display:flex;gap:8px}
 
 /* tabs */
 .tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
@@ -151,7 +152,10 @@ button.save:disabled{opacity:.6}
 <div class="wrap" id="app">
   <header>
     <h1 id="title">Расходы</h1>
-    <button class="iconbtn" id="settingsBtn" aria-label="Настройки">⚙︎</button>
+    <div class="hbtns">
+      <button class="iconbtn" id="themeBtn" aria-label="Тёмная тема">☾</button>
+      <button class="iconbtn" id="settingsBtn" aria-label="Настройки">⚙︎</button>
+    </div>
   </header>
   <div class="tabs" id="tabs"></div>
   <div id="form"></div>
@@ -215,7 +219,15 @@ const mq = window.matchMedia("(prefers-color-scheme: dark)");
 function applyTheme(){
   const eff = state.theme === "auto" ? (mq.matches ? "dark" : "light") : state.theme;
   document.documentElement.dataset.theme = eff;
+  const bg = eff === "dark" ? "#0f1115" : "#f6f7f9";
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.content = bg);
+  const tb = document.getElementById("themeBtn");
+  if(tb){ tb.textContent = eff === "dark" ? "☀︎" : "☾";
+          tb.setAttribute("aria-label", eff === "dark" ? "Светлая тема" : "Тёмная тема"); }
+  document.querySelectorAll("#themeSeg button").forEach(b =>
+    b.classList.toggle("active", b.dataset.v === state.theme));
 }
+function setTheme(t){ state.theme = t; LS.set("theme", t); applyTheme(); }
 mq.addEventListener("change", applyTheme);
 document.addEventListener("visibilitychange", () => { if(!document.hidden) applyTheme(); });
 applyTheme();
@@ -734,10 +746,10 @@ function openSettings(isSetup){
 }
 $("#settingsBtn").onclick = () => openSettings(false);
 $("#cfgClose").onclick = () => $("#setupModal").classList.remove("show");
-document.querySelectorAll("#themeSeg button").forEach(b => b.onclick = () => {
-  state.theme = b.dataset.v; LS.set("theme", state.theme); applyTheme();
-  document.querySelectorAll("#themeSeg button").forEach(x => x.classList.toggle("active", x === b));
-});
+document.querySelectorAll("#themeSeg button").forEach(b => b.onclick = () => setTheme(b.dataset.v));
+$("#themeBtn").onclick = () => {
+  setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); vibrate();
+};
 $("#cfgSave").onclick = async () => {
   const token = $("#cfgToken").value.trim(), baseId = $("#cfgBase").value.trim();
   if(!token || !baseId){ toast("Заполните токен и Base ID", true); return; }
