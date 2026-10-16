@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Расходы</title>
+<meta name="description" content="Быстрая запись расходов и доходов в Airtable">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{
+  --bg:#f6f7f9; --card:#ffffff; --text:#15181d; --text2:#6b7280;
+  --border:#e5e7eb; --chip:#eef0f3; --chip-text:#374151;
+  --accent:#16a34a; --accent-text:#ffffff;
+  --expense:#dc2626; --income:#16a34a;
+  --input:#f3f4f6; --shadow:0 1px 3px rgba(0,0,0,.08);
+  --danger:#dc2626;
+}
+[data-theme="dark"]{
+  --bg:#0f1115; --card:#171a21; --text:#e7e9ee; --text2:#9aa1ad;
+  --border:#262b35; --chip:#222733; --chip-text:#c3c9d4;
+  --accent:#22c55e; --accent-text:#08110b;
+  --expense:#f87171; --income:#4ade80;
+  --input:#1f242e; --shadow:0 1px 3px rgba(0,0,0,.4);
+  --danger:#f87171;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:16px; line-height:1.4;
+  padding-bottom:calc(96px + env(safe-area-inset-bottom));
+  transition:background .25s,color .25s;
+}
+.wrap{max-width:480px;margin:0 auto;padding:12px 14px}
+header{display:flex;align-items:center;justify-content:space-between;padding:6px 0 10px}
+header h1{font-size:20px;margin:0;font-weight:700}
+.iconbtn{background:var(--chip);border:none;border-radius:12px;width:40px;height:40px;
+  font-size:18px;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+/* tabs */
+.tabs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:8px 14px;border-radius:999px;background:var(--chip);color:var(--chip-text);
+  border:none;font-size:14px;font-weight:600;cursor:pointer}
+.tab.active{background:var(--text);color:var(--bg)}
+
+/* mode switch */
+.mode{display:flex;background:var(--chip);border-radius:14px;padding:4px;margin:12px 0}
+.mode button{flex:1;border:none;background:transparent;padding:10px;border-radius:10px;
+  font-size:15px;font-weight:700;color:var(--text2);cursor:pointer;transition:all .15s}
+.mode button.active.exp{background:var(--card);color:var(--expense);box-shadow:var(--shadow)}
+.mode button.active.inc{background:var(--card);color:var(--income);box-shadow:var(--shadow)}
+
+/* amount */
+.amount{background:var(--card);border-radius:18px;padding:18px 16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.amount label{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.amount input{width:100%;border:none;background:transparent;color:var(--text);
+  font-size:44px;font-weight:700;outline:none;padding:2px 0;font-variant-numeric:tabular-nums}
+.amount input::placeholder{color:var(--border)}
+
+.section{margin-bottom:12px}
+.section .lbl{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;
+  font-weight:600;margin:0 2px 6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:9px 14px;border-radius:999px;background:var(--chip);color:var(--chip-text);
+  border:1px solid transparent;font-size:14px;font-weight:500;cursor:pointer;
+  transition:transform .15s ease, box-shadow .18s ease, background .18s ease}
+.chip:active{transform:scale(.93)}
+.chip.sel{background:var(--accent);color:var(--accent-text);font-weight:700;animation:chipPop .25s cubic-bezier(.34,1.56,.64,1)}
+@keyframes chipPop{0%{transform:scale(.96)}55%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+input.txt,textarea.txt,select.txt{
+  width:100%;background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:12px 14px;font-size:16px;color:var(--text);outline:none;font-family:inherit}
+input.txt:focus,textarea.txt:focus{border-color:var(--accent)}
+input[type="date"].txt{min-height:48px;-webkit-appearance:none;appearance:none}
+
+details.more{margin-bottom:12px}
+details.more summary{list-style:none;cursor:pointer;font-size:14px;font-weight:600;color:var(--text2);
+  padding:10px 2px;display:flex;align-items:center;gap:6px}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary::after{content:"▾";transition:transform .2s}
+details.more[open] summary::after{transform:rotate(180deg)}
+
+/* airtable-colored chips */
+.chip.colored{border:1px solid rgba(0,0,0,.06)}
+.chip.colored.sel{box-shadow:0 0 0 2px var(--bg), 0 0 0 3.2px var(--text);font-weight:700}
+[data-theme="dark"] .chip.colored{border-color:rgba(255,255,255,.08);filter:saturate(.92)}
+
+/* recent collapsed */
+.recent summary{font-size:14px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;
+  font-weight:600;cursor:pointer;list-style:none;padding:6px 2px;margin-bottom:4px}
+.recent summary::-webkit-details-marker{display:none}
+.recent summary::after{content:" ▸"}
+.recent details[open] summary::after{content:" ▾"}
+
+.savebar{position:fixed;bottom:0;left:0;right:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+  background:linear-gradient(transparent,var(--bg) 30%)}
+.savebar .inner{max-width:480px;margin:0 auto}
+button.save{width:100%;padding:16px;border:none;border-radius:16px;font-size:18px;font-weight:800;
+  background:var(--accent);color:var(--accent-text);cursor:pointer;box-shadow:var(--shadow);transition:background .2s}
+button.save:disabled{opacity:.6}
+
+/* recent */
+.recent{margin-top:18px}
+.recent h2{font-size:14px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px}
+.rec{background:var(--card);border-radius:14px;padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow);
+  display:flex;justify-content:space-between;align-items:center;gap:10px}
+.rec .l{min-width:0}
+.rec .t{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec .s{font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rec .p{font-weight:700;font-size:16px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rec .p.exp{color:var(--expense)} .rec .p.inc{color:var(--income)}
+
+/* toast */
+#toast{position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-80px);
+  background:var(--text);color:var(--bg);padding:12px 20px;border-radius:999px;font-weight:700;
+  font-size:15px;transition:transform .3s;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:90vw}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--danger);color:#fff}
+
+/* modal / setup */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;z-index:40}
+.modal.show{display:flex}
+.sheet{background:var(--card);border-radius:22px 22px 0 0;width:100%;max-width:480px;margin:0 auto;
+  padding:20px 18px calc(24px + env(safe-area-inset-bottom));max-height:88vh;overflow-y:auto}
+.sheet h2{margin:0 0 14px;font-size:19px}
+.sheet .lbl{font-size:13px;font-weight:600;color:var(--text2);margin:12px 2px 5px}
+.sheet .hint{font-size:13px;color:var(--text2);margin:6px 2px}
+.sheet a{color:var(--accent)}
+.btn{width:100%;padding:14px;border:none;border-radius:14px;font-size:16px;font-weight:700;
+  background:var(--accent);color:var(--accent-text);cursor:pointer;margin-top:14px}
+.btn.ghost{background:var(--chip);color:var(--text)}
+.seg{display:flex;background:var(--chip);border-radius:12px;padding:3px}
+.seg button{flex:1;border:none;background:transparent;padding:9px;border-radius:9px;font-size:14px;
+  font-weight:600;color:var(--text2);cursor:pointer}
+.seg button.active{background:var(--card);color:var(--text);box-shadow:var(--shadow)}
+.queuebadge{font-size:13px;color:var(--text2);text-align:center;margin-top:8px}
+#app{display:none}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <header>
+    <h1 id="title">Расходы</h1>
+    <button class="iconbtn" id="settingsBtn" aria-label="Настройки">⚙︎</button>
+  </header>
+  <div class="tabs" id="tabs"></div>
+  <div id="form"></div>
+  <div class="queuebadge" id="queueBadge" style="display:none"></div>
+  <div class="recent" id="recent"></div>
+</div>
+
+<div class="savebar" id="savebar" style="display:none">
+  <div class="inner"><button class="save" id="saveBtn">Сохранить</button></div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Setup / Settings -->
+<div class="modal" id="setupModal">
+  <div class="sheet">
+    <h2 id="setupTitle">Подключение к Airtable</h2>
+    <div class="hint" id="setupHint">
+      Создайте персональный токен на <a href="https://airtable.com/create/tokens" target="_blank">airtable.com/create/tokens</a>
+      со скоупами <b>data.records:read</b>, <b>data.records:write</b>, <b>schema.bases:read</b> и доступом к вашей базе.
+      Base ID — это часть адреса базы, начинается с <b>app</b>.
+    </div>
+    <div class="lbl">Personal Access Token</div>
+    <input class="txt" id="cfgToken" placeholder="pat..." autocomplete="off">
+    <div class="lbl">Base ID</div>
+    <input class="txt" id="cfgBase" placeholder="appXXXXXXXXXXXXXX" autocomplete="off">
+    <div class="lbl">Тема</div>
+    <div class="seg" id="themeSeg">
+      <button data-v="auto">Авто (система)</button>
+      <button data-v="light">Светлая</button>
+      <button data-v="dark">Тёмная</button>
+    </div>
+    <div class="hint">«Авто» следует настройке телефона — на iPhone/Android система сама переключает тему по заходу и восходу солнца.</div>
+    <div class="hint" id="diag" style="display:none"></div>
+    <button class="btn" id="cfgSave">Подключить</button>
+    <button class="btn ghost" id="cfgRefresh" style="display:none">Обновить структуру базы</button>
+    <button class="btn ghost" id="cfgClose" style="display:none">Закрыть</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============ storage & state ============ */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v===null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ localStorage.setItem(k, JSON.stringify(v)); },
+  del(k){ localStorage.removeItem(k); }
+};
+const state = {
+  cfg: LS.get("cfg", null),            // {token, baseId}
+  schema: LS.get("schema", null),      // [{id,name,fields:[...]}]
+  tableId: LS.get("tableId", null),
+  theme: LS.get("theme", "auto"),
+  queue: LS.get("queue", []),          // pending records [{tableId, fields}]
+  last: LS.get("last", {}),            // remembered selections per table
+  mode: "expense"                      // expense | income (Expenses table)
+};
+
+/* ============ theme ============ */
+const mq = window.matchMedia("(prefers-color-scheme: dark)");
+function applyTheme(){
+  const eff = state.theme === "auto" ? (mq.matches ? "dark" : "light") : state.theme;
+  document.documentElement.dataset.theme = eff;
+}
+mq.addEventListener("change", applyTheme);
+document.addEventListener("visibilitychange", () => { if(!document.hidden) applyTheme(); });
+applyTheme();
+
+/* ============ helpers ============ */
+const $ = s => document.querySelector(s);
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function toast(msg, err){
+  const t = $("#toast");
+  t.textContent = msg; t.className = err ? "show err" : "show";
+  clearTimeout(t._h); t._h = setTimeout(()=>{ t.className=""; }, 2200);
+}
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function vibrate(){ if(navigator.vibrate) navigator.vibrate(15); }
+
+/* live thousands grouping: 1000000 → "1 000 000" (parse strips \s, so save is unaffected) */
+function groupAmount(raw){
+  let v = String(raw).replace(/[^\d.,]/g, "");
+  const dm = v.match(/[.,]/);
+  let int = v, dec = "";
+  if(dm){
+    const i = v.indexOf(dm[0]);
+    int = v.slice(0, i);
+    dec = dm[0] + v.slice(i + 1).replace(/[.,]/g, "");
+  }
+  int = int.replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return int + dec;
+}
+function attachAmountFormat(el){
+  el.addEventListener("input", () => {
+    const before = el.value.slice(0, el.selectionStart).replace(/[^\d.,]/g, "").length;
+    const v = groupAmount(el.value);
+    if(v === el.value) return;
+    el.value = v;
+    let pos = 0, seen = 0;
+    while(pos < v.length && seen < before){ if(/[\d.,]/.test(v[pos])) seen++; pos++; }
+    el.setSelectionRange(pos, pos);
+  });
+}
+
+/* ============ airtable api ============ */
+async function api(path, opts={}){
+  const r = await fetch("https://api.airtable.com/v0" + path, {
+    ...opts,
+    headers: { "Authorization": "Bearer " + state.cfg.token, "Content-Type": "application/json", ...(opts.headers||{}) }
+  });
+  if(!r.ok){
+    let msg = r.status + " " + r.statusText;
+    try{ const j = await r.json(); if(j.error) msg = (j.error.message || j.error.type || msg); }catch(e){}
+    const err = new Error(msg); err.status = r.status; throw err;
+  }
+  return r.json();
+}
+async function fetchSchema(){
+  const j = await api("/meta/bases/" + state.cfg.baseId + "/tables");
+  return j.tables.map(t => ({ id: t.id, name: t.name, fields: t.fields }));
+}
+
+/* fallback schema if token lacks schema.bases:read */
+const FALLBACK = [{
+  id: "Expenses", name: "Expenses",
+  fields: [
+    {name:"Price", type:"number"},
+    {name:"Type", type:"singleSelect", options:{choices:[{name:"static"},{name:"dynamic"}]}},
+    {name:"Static", type:"singleLineText"},
+    {name:"Description", type:"singleLineText"},
+    {name:"Expenses", type:"singleSelect", options:{choices:["Home","Personal","Car","Entertainment","Monthly paymentes","Gifts","Savings","Education","Charity","Healthcare"].map(n=>({name:n}))}},
+    {name:"Incomes", type:"singleSelect", options:{choices:[{name:"Salary"},{name:"Investments"}]}},
+    {name:"Date", type:"date"},
+    {name:"Hukm", type:"singleSelect", options:{choices:["Farz","Vojib","Sunnat","Muboh","Makruh"].map(n=>({name:n}))}},
+    {name:"Tag", type:"singleLineText"},
+    {name:"Month", type:"singleSelect", options:{choices:MONTHS.map(n=>({name:n}))}},
+    {name:"Year", type:"number"}
+  ]
+}];
+
+/* ============ field rendering ============ */
+const EDITABLE = new Set(["singleLineText","multilineText","richText","number","currency","percent","rating",
+  "checkbox","singleSelect","multipleSelects","date","dateTime","email","url","phoneNumber","duration"]);
+/* Month/Year are computed from Date on save — matched loosely ("Month", "month ", "Months"…).
+   Supports plain fields (select/text/number) AND linked records (e.g. Month → "Monthly report",
+   Year → "Annually report"): for links we resolve the record by name and write its id. */
+const AUTO_RE = /^(months?|years?)$/i;
+const AUTO_WRITABLE = new Set(["singleSelect","singleLineText","number","multipleRecordLinks"]);
+function linkedTableOf(fl){
+  if(fl.type !== "multipleRecordLinks" || !fl.options) return null;
+  return state.schema.find(t => t.id === fl.options.linkedTableId) || null;
+}
+function monthField(table){
+  return table.fields.find(fl => /^months?$/i.test(fl.name.trim()) && AUTO_WRITABLE.has(fl.type))
+      || table.fields.find(fl => { const lt = linkedTableOf(fl); return lt && /month/i.test(lt.name); });
+}
+function yearField(table){
+  return table.fields.find(fl => /^years?$/i.test(fl.name.trim()) && AUTO_WRITABLE.has(fl.type))
+      || table.fields.find(fl => { const lt = linkedTableOf(fl); return lt && /annual|year/i.test(lt.name); });
+}
+/* find a record in the linked table by its primary-field value ("June", "2026") */
+const linkCache = {};
+async function resolveLink(fl, value){
+  const lt = linkedTableOf(fl);
+  if(!lt || !lt.fields.length) return null;
+  const key = lt.id + "::" + value;
+  if(key in linkCache) return linkCache[key];
+  const primary = lt.fields[0].name;
+  const v = String(value).replace(/"/g, "");
+  let rec = null;
+  for(const formula of ['{' + primary + '}&""="' + v + '"', 'SEARCH("' + v + '",{' + primary + '}&"")']){
+    const j = await api("/" + state.cfg.baseId + "/" + encodeURIComponent(lt.id)
+      + "?maxRecords=1&filterByFormula=" + encodeURIComponent(formula));
+    rec = j.records[0];
+    if(rec) break;
+  }
+  const id = rec ? rec.id : null;
+  linkCache[key] = id;
+  return id;
+}
+/* fill link-type Month/Year right before sending (works for queued records too) */
+async function applyAutoLinks(table, fields, auto){
+  if(!auto) return;
+  for(const [fl, val] of [[monthField(table), auto.month], [yearField(table), auto.year]]){
+    if(!fl || val == null || fl.type !== "multipleRecordLinks") continue;
+    const id = await resolveLink(fl, val);
+    if(id) fields[fl.name] = [id];
+    else delete fields[fl.name];   // no matching record in report table — skip, don't create garbage
+  }
+}
+function fieldChoices(f){ return (f.options && f.options.choices) || []; }
+
+/* official Airtable select-option palette (from Meta API choice.color) */
+const ATCOLORS = {
+  blueLight2:"#CFDFFF", cyanLight2:"#D0F0FD", tealLight2:"#C2F5E9", greenLight2:"#D1F7C4",
+  yellowLight2:"#FFEAB6", orangeLight2:"#FEE2D5", redLight2:"#FFDCE5", pinkLight2:"#FFDAF6",
+  purpleLight2:"#EDE2FE", grayLight2:"#EEEEEE",
+  blueLight1:"#9CC7FF", cyanLight1:"#77D1F3", tealLight1:"#72DDC3", greenLight1:"#93E088",
+  yellowLight1:"#FFD66E", orangeLight1:"#FFA981", redLight1:"#FF9EB7", pinkLight1:"#F99DE2",
+  purpleLight1:"#CDB0FF", grayLight1:"#CCCCCC",
+  blueBright:"#2D7FF9", cyanBright:"#18BFFF", tealBright:"#20D9D2", greenBright:"#20C933",
+  yellowBright:"#FCB400", orangeBright:"#FF6F2C", redBright:"#F82B60", pinkBright:"#FF08C2",
+  purpleBright:"#8B46FF", grayBright:"#666666",
+  blueDark1:"#2750AE", cyanDark1:"#0B76B7", tealDark1:"#06A09B", greenDark1:"#338A17",
+  yellowDark1:"#B87503", orangeDark1:"#D74D26", redDark1:"#BA1E45", pinkDark1:"#B2158B",
+  purpleDark1:"#6B1CB0", grayDark1:"#444444"
+};
+function choiceStyle(color){
+  const hex = ATCOLORS[color]; if(!hex) return null;
+  return { bg: hex, fg: /Bright|Dark/.test(color) ? "#ffffff" : "#1f2430" };
+}
+
+function chipGroup(name, choices, selected, multi){
+  const div = document.createElement("div");
+  div.className = "chips"; div.dataset.field = name; div.dataset.multi = multi ? "1" : "";
+  choices.forEach(raw => {
+    const c = typeof raw === "object" ? raw.name : raw;
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip" + ((multi ? (selected||[]).includes(c) : selected===c) ? " sel" : "");
+    b.textContent = c;
+    const st = typeof raw === "object" ? choiceStyle(raw.color) : null;
+    if(st){ b.style.background = st.bg; b.style.color = st.fg; b.classList.add("colored"); }
+    b.onclick = () => {
+      if(multi){ b.classList.toggle("sel"); }
+      else {
+        const was = b.classList.contains("sel");
+        div.querySelectorAll(".chip").forEach(x=>x.classList.remove("sel"));
+        if(!was) b.classList.add("sel");
+      }
+      vibrate();
+    };
+    div.appendChild(b);
+  });
+  return div;
+}
+function chipValue(div){
+  const sel = [...div.querySelectorAll(".chip.sel")].map(b=>b.textContent);
+  return div.dataset.multi ? sel : (sel[0] || null);
+}
+
+function inputFor(f, preset){
+  // returns {el, get()} for a generic field
+  const t = f.type;
+  if(t === "singleSelect" || t === "multipleSelects"){
+    const el = chipGroup(f.name, fieldChoices(f), preset, t==="multipleSelects");
+    return { el, get: () => chipValue(el) };
+  }
+  if(t === "checkbox"){
+    const el = chipGroup(f.name, ["Да"], preset ? "Да" : null, false);
+    return { el, get: () => chipValue(el) === "Да" ? true : null };
+  }
+  const el = document.createElement(t === "multilineText" || t === "richText" ? "textarea" : "input");
+  el.className = "txt";
+  if(el.tagName === "TEXTAREA"){ el.rows = 2; }
+  else if(t === "date" || t === "dateTime"){ el.type = "date"; el.value = todayISO(); }
+  else if(["number","currency","percent","rating","duration"].includes(t)){ el.type = "text"; el.inputMode = "decimal"; }
+  else if(t === "email"){ el.type = "email"; }
+  else if(t === "url"){ el.type = "url"; }
+  else if(t === "phoneNumber"){ el.type = "tel"; }
+  el.dataset.field = f.name;
+  if(preset !== undefined && preset !== null && el.type !== "date") el.value = preset;
+  return { el, get: () => {
+    let v = el.value.trim();
+    if(!v) return null;
+    if(["number","currency","percent","rating","duration"].includes(t)){
+      const n = parseFloat(v.replace(",",".").replace(/\s/g,""));
+      return isNaN(n) ? null : n;
+    }
+    return v;
+  }};
+}
+
+function section(label, el){
+  const s = document.createElement("div"); s.className = "section";
+  if(label){ const l = document.createElement("div"); l.className = "lbl"; l.textContent = label; s.appendChild(l); }
+  s.appendChild(el); return s;
+}
+
+/* ============ form builders ============ */
+let forms = {};   // mode ("expense"|"income") -> {table, getters, amountInput, descInput, dateField, root}
+function currentTable(){ return state.schema.find(t => t.id === state.tableId) || state.schema[0]; }
+function findField(table, name){ return table.fields.find(f => f.name === name); }
+
+const DETAIL_ORDER = ["Type","Hukm","Tag","Static"];
+const DETAIL_NAMES = /^(type|hukm|static)$/i;   // selects that belong in "details", not main category
+
+function buildFastForm(table, opts={}){
+  const skip = new Set(opts.skip || []);
+  const last = state.last[table.id] || {};
+  const root = document.createElement("div");
+  const g = {};
+  const editable = table.fields.filter(f => EDITABLE.has(f.type) && !skip.has(f.name) && !AUTO_RE.test(f.name.trim()));
+
+  // big amount: Price/Amount/Sum or first numeric field
+  const amountF = editable.find(f => /^(price|amount|sum|cost|value)$/i.test(f.name) && ["number","currency"].includes(f.type))
+               || editable.find(f => ["number","currency"].includes(f.type));
+  let amountInput = null;
+  if(amountF){
+    const am = document.createElement("div"); am.className = "amount";
+    am.innerHTML = '<label>' + esc(/^price$/i.test(amountF.name) ? "Сумма" : amountF.name) + '</label>';
+    amountInput = document.createElement("input");
+    amountInput.inputMode = "decimal"; amountInput.placeholder = "0"; amountInput.autocomplete = "off"; amountInput.enterKeyHint = "done";
+    attachAmountFormat(amountInput);
+    am.appendChild(amountInput); root.appendChild(am);
+    g[amountF.name] = () => {
+      const n = parseFloat(amountInput.value.replace(",",".").replace(/\s/g,""));
+      return isNaN(n) ? null : n;
+    };
+  }
+
+  // main category: first single-select that isn't a "detail" select
+  const mainSel = editable.find(f => f.type === "singleSelect" && !DETAIL_NAMES.test(f.name));
+  if(mainSel){
+    const grp = chipGroup(mainSel.name, fieldChoices(mainSel), last[mainSel.name], false);
+    root.appendChild(section("Категория", grp));
+    g[mainSel.name] = () => chipValue(grp);
+  }
+
+  // description-like text field
+  const descF = editable.find(f => /^(description|note|notes|name|title)$/i.test(f.name)
+    && ["singleLineText","multilineText","richText"].includes(f.type));
+  let descInput = null;
+  if(descF){
+    descInput = document.createElement("input"); descInput.className = "txt";
+    descInput.placeholder = "Описание"; descInput.autocomplete = "off"; descInput.enterKeyHint = "done";
+    root.appendChild(section("Описание", descInput));
+    g[descF.name] = () => descInput.value.trim() || null;
+  }
+
+  // date
+  const dateF = editable.find(f => f.type === "date" || f.type === "dateTime");
+  if(dateF){
+    const dateInput = document.createElement("input");
+    dateInput.type = "date"; dateInput.className = "txt"; dateInput.value = todayISO();
+    root.appendChild(section("Дата", dateInput));
+    g[dateF.name] = () => dateInput.value || null;
+  }
+
+  // everything else → details, open by default
+  const used = new Set([amountF, mainSel, descF, dateF].filter(Boolean).map(f => f.name));
+  const rest = editable.filter(f => !used.has(f.name))
+    .sort((a,b) => {
+      const ia = DETAIL_ORDER.indexOf(a.name), ib = DETAIL_ORDER.indexOf(b.name);
+      return (ia<0?99:ia) - (ib<0?99:ib);
+    });
+  if(rest.length){
+    const more = document.createElement("details"); more.className = "more"; more.open = true;
+    more.innerHTML = "<summary>Детали</summary>";
+    rest.forEach(f => {
+      const {el, get} = inputFor(f, last[f.name]);
+      more.appendChild(section(f.name, el));
+      g[f.name] = get;
+    });
+    root.appendChild(more);
+  }
+  return { table, root, getters: g, amountInput, descInput,
+           amountName: amountF ? amountF.name : null, dateField: dateF || null };
+}
+
+function setMode(m){
+  state.mode = m;
+  document.querySelectorAll(".mode button").forEach(b =>
+    b.classList.toggle("active", b.dataset.mode === m));
+  Object.entries(forms).forEach(([mode, f]) => { if(f) f.root.style.display = mode === m ? "" : "none"; });
+  $("#saveBtn").textContent = m === "income" ? "Добавить доход" : "Добавить";
+}
+
+function renderForm(){
+  const table = currentTable();
+  const form = $("#form"); form.innerHTML = ""; forms = {};
+  const isExpenses = /expense/i.test(table.name);
+  const incTable = state.schema.find(t => /income/i.test(t.name) && t.id !== table.id);
+
+  if(isExpenses && incTable){
+    // mode switch: expense → Expenses table, income → Incomes table
+    const mode = document.createElement("div"); mode.className = "mode";
+    const be = document.createElement("button"); be.textContent = "− Расход"; be.className = "exp"; be.dataset.mode = "expense";
+    const bi = document.createElement("button"); bi.textContent = "+ Доход"; bi.className = "inc"; bi.dataset.mode = "income";
+    be.onclick = () => { setMode("expense"); vibrate(); };
+    bi.onclick = () => { setMode("income"); vibrate(); };
+    mode.append(be, bi); form.appendChild(mode);
+
+    forms.expense = buildFastForm(table, { skip: ["Incomes", "Static"] });
+    forms.income = buildFastForm(incTable);
+    form.append(forms.expense.root, forms.income.root);
+  } else {
+    forms.expense = buildFastForm(table, isExpenses ? { skip: ["Static"] } : {});
+    form.appendChild(forms.expense.root);
+  }
+  setMode("expense");
+  $("#savebar").style.display = "";
+}
+
+/* ============ save (with static aggregation) ============ */
+/* Static expenses are accumulated in ONE row per category+month (free-plan row limit):
+   find existing row → add Price, bump "Nx" counter in Description. */
+async function findStaticRecord(table, fields, auto){
+  const q = v => String(v).replace(/"/g, "");
+  const terms = ['{Type}="' + q(fields["Type"]) + '"', '{Expenses}="' + q(fields["Expenses"]) + '"'];
+  // &"" coerces any field type (select, number, linked record) to its display text
+  const mF = monthField(table), yF = yearField(table);
+  const mVal = auto ? auto.month : (mF ? fields[mF.name] : null);
+  const yVal = auto ? auto.year : (yF ? fields[yF.name] : null);
+  if(mF && mVal != null && !Array.isArray(mVal)) terms.push('{' + mF.name + '}&""="' + q(mVal) + '"');
+  if(yF && yVal != null && !Array.isArray(yVal)) terms.push('{' + yF.name + '}&""="' + q(yVal) + '"');
+  const qs = "?maxRecords=1&filterByFormula=" + encodeURIComponent("AND(" + terms.join(",") + ")");
+  const j = await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id) + qs);
+  return j.records[0] || null;
+}
+async function persist(table, fields, isStatic, auto){
+  await applyAutoLinks(table, fields, auto);
+  if(isStatic){
+    const r = await findStaticRecord(table, fields, auto);
+    if(r){
+      const old = Number(r.fields["Price"]) || 0;
+      const add = Number(fields["Price"]) || 0;
+      let base = String(r.fields["Description"] || "").trim(), count = 1;
+      const m = base.match(/^(.*\S)?\s*(\d+)x$/);
+      if(m){ base = (m[1] || "").trim(); count = parseInt(m[2], 10) || 1; }
+      const nd = (fields["Description"] || "").trim();
+      if(nd && !base.toLowerCase().includes(nd.toLowerCase())) base = base ? base + ", " + nd : nd;
+      const patch = { Price: old + add, Description: (base ? base + " " : "") + (count + 1) + "x" };
+      await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id) + "/" + r.id,
+        { method: "PATCH", body: JSON.stringify({ fields: patch, typecast: true }) });
+      return { updated: true, total: old + add, count: count + 1 };
+    }
+  }
+  await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id),
+    { method: "POST", body: JSON.stringify({ records: [{ fields }], typecast: true }) });
+  return { updated: false };
+}
+async function save(){
+  const f = forms[state.mode] || forms.expense;
+  const table = f.table;
+  const fields = {};
+  for(const [name, get] of Object.entries(f.getters)){
+    const v = get();
+    if(v !== null && v !== undefined && !(Array.isArray(v) && !v.length)) fields[name] = v;
+  }
+  if(f.amountName && fields[f.amountName] == null){
+    toast("Введите сумму", true); f.amountInput?.focus(); return;
+  }
+  // auto Month / Year from Date — plain values here, linked records resolved in persist()
+  const mF = monthField(table), yF = yearField(table);
+  let auto = null;
+  if(mF || yF){
+    const dval = f.dateField ? fields[f.dateField.name] : null;
+    const d = dval ? new Date(dval + "T12:00:00") : new Date();
+    auto = { month: MONTHS[d.getMonth()], year: String(d.getFullYear()) };
+    if(mF && mF.type !== "multipleRecordLinks") fields[mF.name] = auto.month;
+    if(yF && yF.type !== "multipleRecordLinks") fields[yF.name] = (yF.type === "number") ? d.getFullYear() : auto.year;
+  }
+  if(!Object.keys(fields).length){ toast("Нечего сохранять", true); return; }
+
+  // remember selected chips for next time
+  const remember = {};
+  table.fields.filter(x => x.type === "singleSelect").forEach(x => { if(fields[x.name]) remember[x.name] = fields[x.name]; });
+  state.last[table.id] = { ...(state.last[table.id]||{}), ...remember };
+  LS.set("last", state.last);
+
+  const isStatic = state.mode === "expense" && /expense/i.test(table.name)
+    && /^static$/i.test(fields["Type"] || "") && !!fields["Expenses"];
+
+  const btn = $("#saveBtn"); btn.disabled = true;
+  try{
+    const res = await persist(table, fields, isStatic, auto);
+    if(res.updated){
+      toast("Static " + fields["Expenses"] + " → " + Number(res.total).toLocaleString("ru-RU") + " (" + res.count + "x)");
+    } else {
+      toast("Сохранено ✓");
+    }
+    vibrate(); resetAfterSave(f); loadRecent();
+  }catch(e){
+    if(e.status === 401 || e.status === 403 || e.status === 422){
+      toast("Ошибка: " + e.message, true);
+    } else {
+      // network problem → queue for later
+      state.queue.push({ tableId: table.id, fields, static: isStatic, auto });
+      LS.set("queue", state.queue);
+      updateQueueBadge();
+      toast("Нет сети — сохранится позже");
+      resetAfterSave(f);
+    }
+  } finally { btn.disabled = false; }
+}
+function resetAfterSave(f){
+  if(f.amountInput) f.amountInput.value = "";
+  if(f.descInput) f.descInput.value = "";
+  if(f.amountInput) f.amountInput.focus();
+}
+async function flushQueue(){
+  if(!state.queue.length || !state.cfg) return;
+  const q = [...state.queue];
+  for(const item of q){
+    const table = state.schema.find(t => t.id === item.tableId);
+    if(!table){ state.queue.splice(state.queue.indexOf(item), 1); LS.set("queue", state.queue); continue; }
+    try{
+      await persist(table, item.fields, !!item.static, item.auto || null);
+      state.queue.splice(state.queue.indexOf(item), 1);
+      LS.set("queue", state.queue);
+    }catch(e){ break; }
+  }
+  updateQueueBadge();
+  if(!state.queue.length && q.length){ toast("Отложенные записи отправлены ✓"); loadRecent(); }
+}
+function updateQueueBadge(){
+  const b = $("#queueBadge");
+  if(state.queue.length){ b.style.display = ""; b.textContent = "⏳ В очереди: " + state.queue.length; }
+  else b.style.display = "none";
+}
+window.addEventListener("online", flushQueue);
+
+/* ============ recent records ============ */
+async function loadRecent(){
+  const table = currentTable();
+  const box = $("#recent"); box.innerHTML = "";
+  try{
+    const dateF = findField(table, "Date");
+    let qs = "?maxRecords=6";
+    if(dateF) qs += "&sort%5B0%5D%5Bfield%5D=Date&sort%5B0%5D%5Bdirection%5D=desc";
+    const j = await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id) + qs);
+    if(!j.records.length) return;
+    const det = document.createElement("details");   // collapsed by default
+    det.innerHTML = "<summary>Последние</summary>";
+    const isIncTable = /income/i.test(table.name);
+    j.records.forEach(r => {
+      const f = r.fields;
+      const isInc = isIncTable || !!f["Incomes"];
+      const title = f["Description"] || f["Expenses"] || f["Incomes"] || f["Tag"] || Object.values(f).find(v=>typeof v==="string") || "—";
+      const sub = [f["Expenses"]||f["Incomes"], f["Date"]].filter(Boolean).join(" · ");
+      const price = f["Price"] != null ? f["Price"] : Object.values(f).find(v=>typeof v==="number");
+      const el = document.createElement("div"); el.className = "rec";
+      el.innerHTML = '<div class="l"><div class="t">'+esc(title)+'</div><div class="s">'+esc(sub)+'</div></div>' +
+        (price != null ? '<div class="p '+(isInc?"inc":"exp")+'">'+(isInc?"+":"−")+Number(price).toLocaleString("ru-RU")+'</div>' : '');
+      det.appendChild(el);
+    });
+    box.appendChild(det);
+  }catch(e){ /* recent list is optional */ }
+}
+
+/* ============ tabs ============ */
+function renderTabs(){
+  const tabs = $("#tabs"); tabs.innerHTML = "";
+  // Expenses first
+  const sorted = [...state.schema].sort((a,b) => (/expense/i.test(b.name)?1:0) - (/expense/i.test(a.name)?1:0));
+  sorted.forEach(t => {
+    const b = document.createElement("button");
+    b.className = "tab" + (t.id === state.tableId ? " active" : "");
+    b.textContent = t.name;
+    b.onclick = () => {
+      state.tableId = t.id; LS.set("tableId", t.id);
+      renderTabs(); renderForm(); loadRecent();
+    };
+    tabs.appendChild(b);
+  });
+}
+
+/* ============ setup / settings ============ */
+function openSettings(isSetup){
+  $("#setupModal").classList.add("show");
+  $("#setupTitle").textContent = isSetup ? "Подключение к Airtable" : "Настройки";
+  $("#setupHint").style.display = isSetup ? "" : "none";
+  $("#cfgClose").style.display = isSetup ? "none" : "";
+  $("#cfgRefresh").style.display = isSetup ? "none" : "";
+  $("#cfgSave").textContent = isSetup ? "Подключить" : "Сохранить";
+  if(state.cfg){ $("#cfgToken").value = state.cfg.token; $("#cfgBase").value = state.cfg.baseId; }
+  document.querySelectorAll("#themeSeg button").forEach(b =>
+    b.classList.toggle("active", b.dataset.v === state.theme));
+  const diag = $("#diag");
+  if(!isSetup && state.schema){
+    const t = currentTable(), mF = monthField(t), yF = yearField(t);
+    const show = fl => fl ? "«" + fl.name + "»" + (fl.type === "multipleRecordLinks" ? " (связь → " + (linkedTableOf(fl)?.name || "?") + ")" : "") : "⚠️ не найдено";
+    diag.style.display = "";
+    diag.textContent = "Автополя в «" + t.name + "»: Month → " + show(mF) + ", Year → " + show(yF);
+  } else diag.style.display = "none";
+}
+$("#settingsBtn").onclick = () => openSettings(false);
+$("#cfgClose").onclick = () => $("#setupModal").classList.remove("show");
+document.querySelectorAll("#themeSeg button").forEach(b => b.onclick = () => {
+  state.theme = b.dataset.v; LS.set("theme", state.theme); applyTheme();
+  document.querySelectorAll("#themeSeg button").forEach(x => x.classList.toggle("active", x === b));
+});
+$("#cfgSave").onclick = async () => {
+  const token = $("#cfgToken").value.trim(), baseId = $("#cfgBase").value.trim();
+  if(!token || !baseId){ toast("Заполните токен и Base ID", true); return; }
+  state.cfg = { token, baseId }; LS.set("cfg", state.cfg);
+  $("#cfgSave").disabled = true;
+  try{
+    state.schema = await fetchSchema();
+  }catch(e){
+    if(e.status === 403){ state.schema = FALLBACK; toast("Нет скоупа schema — использую стандартную структуру"); }
+    else { toast("Ошибка: " + e.message, true); $("#cfgSave").disabled = false; return; }
+  }
+  LS.set("schema", state.schema);
+  if(!state.schema.find(t => t.id === state.tableId)){
+    const exp = state.schema.find(t => /expense/i.test(t.name)) || state.schema[0];
+    state.tableId = exp.id; LS.set("tableId", state.tableId);
+  }
+  $("#cfgSave").disabled = false;
+  $("#setupModal").classList.remove("show");
+  boot();
+};
+$("#cfgRefresh").onclick = async () => {
+  try{
+    state.schema = await fetchSchema(); LS.set("schema", state.schema);
+    toast("Структура обновлена ✓"); renderTabs(); renderForm();
+  }catch(e){ toast("Ошибка: " + e.message, true); }
+};
+
+/* ============ boot ============ */
+function boot(){
+  if(!state.cfg || !state.schema){ openSettings(true); return; }
+  $("#app").style.display = "block";
+  if(!state.schema.find(t => t.id === state.tableId)){
+    const exp = state.schema.find(t => /expense/i.test(t.name)) || state.schema[0];
+    state.tableId = exp.id;
+  }
+  renderTabs(); renderForm(); loadRecent(); flushQueue(); updateQueueBadge();
+  // refresh schema in background (picks up new select options)
+  fetchSchema().then(s => { state.schema = s; LS.set("schema", s); }).catch(()=>{});
+}
+$("#saveBtn").onclick = save;
+boot();
+
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
