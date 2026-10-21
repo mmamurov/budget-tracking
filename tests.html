@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тесты расчётов</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:16px;background:#f6f7f9;color:#15181d}
+.ok{color:#16a34a}.fail{color:#dc2626;font-weight:700}
+pre{white-space:pre-wrap;font-size:13px}
+</style>
+</head>
+<body>
+<h1 id="sum">…</h1>
+<pre id="log"></pre>
+<script src="calc.js"></script>
+<script>
+"use strict";
+const results = [];
+function eq(name, got, want){
+  const pass = JSON.stringify(got) === JSON.stringify(want);
+  results.push({ name, pass, got, want });
+}
+function near(name, got, want){ eq(name, Math.round(got * 100) / 100, want); }
+
+/* fixture: real October 2026 rows from 💸 Expenses (static rows come from the automation, no Date) */
+const S = (desc, cat, plan, price) => ({ kind:"exp", type:"Static", desc, cat, plan, price, date:null, month:"2026-10" });
+const D = (desc, cat, price, date) => ({ kind:"exp", type:"Dynamic", desc, cat, price, date, month:date.slice(0,7) });
+const oct = [
+  S("Daily ehson","Charity 🌟",2000000,2085000),
+  S("Nafaqa","Home 🏡",1000000,1000000),
+  S("Fuel","Car 🏎️",1500000,760000),
+  S("Haircut","Personal 👤",200000,50000),
+  S("Uyga bozorlik","Home 🏡",3000000,1500000),
+  S("Uztelecom","Monthly payment 🔂",350000,undefined),
+  S("Evos + snacks","Entertainment 🎉",1500000,236000),
+  D("Passport + ID",null,857000,"2026-10-05"),
+  D("Oftalmolog","Healthcare 💊",682000,"2026-10-05"),
+  D("Ko'ylak","Gifts 🎁",500000,"2026-10-05"),
+  D("Fitbit","Gifts 🎁",400000,"2026-10-05"),
+  { kind:"exp", type:null, desc:"Pills", cat:"Healthcare 💊", price:124000, date:"2026-10-05", month:"2026-10" },
+  { kind:"exp", type:null, desc:"Umarga yostiq", cat:null, price:277000, date:"2026-10-05", month:"2026-10" },
+  { kind:"exp", type:null, desc:"Umar gimnastika", cat:null, price:400000, date:"2026-10-05", month:"2026-10" }
+];
+
+/* --- staticSummary --- */
+const s = Calc.staticSummary(oct, "2026-10");
+eq("plan = Σ Static", s.plan, 9550000);
+eq("fact = Σ Price of planned static rows only", s.fact, 5631000);
+eq("diff = fact − plan", s.diff, -3919000);
+near("pct = diff / plan × 100", s.pct, -41.04);
+eq("status ok", s.status, "ok");
+eq("rows without fact counted", s.withoutFact, 1);
+eq("dynamic rows not mixed in", s.items.length, 7);
+
+const over = Calc.staticSummary([S("A","x",5000000,5300000)], "2026-10");
+eq("over plan: +300 000", over.diff, 300000);
+near("over plan: +6%", over.pct, 6);
+const under = Calc.staticSummary([S("A","x",5000000,4700000)], "2026-10");
+eq("under plan: −300 000", under.diff, -300000);
+near("under plan: −6%", under.pct, -6);
+
+const empty = Calc.staticSummary(oct, "2026-11");
+eq("no static rows → empty", empty.status, "empty");
+eq("empty → pct null", empty.pct, null);
+const noplan = Calc.staticSummary([S("A","x",0,100000)], "2026-10");
+eq("static rows without plan → noplan", noplan.status, "noplan");
+eq("noplan → pct null (no division by 0)", noplan.pct, null);
+eq("unplanned static sum reported separately", noplan.unplannedSum, 100000);
+const mixed = Calc.staticSummary([S("A","x",1000,1200), S("B","y",0,500)], "2026-10");
+eq("unplanned static excluded from fact", mixed.fact, 1200);
+eq("unplanned static listed", mixed.unplanned.length, 1);
+
+/* --- totals & change --- */
+const recs = oct.concat([
+  { kind:"inc", cat:"Salary 💳", price:30000000, date:"2026-10-01", month:"2026-10" },
+  { kind:"inc", cat:"Salary 💳", price:25000000, date:"2026-09-30", month:"2026-09" },
+  { kind:"exp", cat:"Home 🏡", price:10000000, date:"2026-09-12", month:"2026-09" },
+  { kind:"exp", cat:"Home 🏡", price:999, date:null, month:null }
+]);
+const t = Calc.totals(recs, "2026-10");
+eq("October expenses", t.exp, 8871000);
+eq("October incomes", t.inc, 30000000);
+eq("October net", t.net, 21129000);
+const p = Calc.totals(recs, "2026-09");
+eq("September totals", p, { inc:25000000, exp:10000000, net:15000000 });
+const ch = Calc.change(t.exp, p.exp);
+eq("change abs", ch.abs, -1129000);
+near("change pct", ch.pct, -11.29);
+eq("change from 0 → pct null", Calc.change(5, 0).pct, null);
+eq("undated records excluded from totals", Calc.totals(recs, null).exp, 999);
+
+/* --- history --- */
+const h = Calc.history(recs, "2026-10", 3);
+eq("history keys", h.map(x => x.key), ["2026-08","2026-09","2026-10"]);
+eq("history empty month = 0", h[0].exp, 0);
+
+/* --- byCategory --- */
+const bc = Calc.byCategory(recs, "2026-10", "exp");
+eq("category total = month expenses", bc.total, 8871000);
+eq("categories sorted by sum", bc.groups[0].name, "Home 🏡");
+eq("Home sum", bc.groups[0].sum, 2500000);
+near("Home share", bc.groups[0].share, 28.18);
+near("shares add up to 100", bc.groups.reduce((a, g) => a + g.share, 0), 100);
+eq("missing category grouped", bc.groups.some(g => g.name === Calc.NO_CAT), true);
+eq("zero-sum category hidden", bc.groups.some(g => g.name === "Monthly payment 🔂"), false);
+eq("income categories", Calc.byCategory(recs, "2026-10", "inc").groups.map(g => [g.name, g.sum]), [["Salary 💳", 30000000]]);
+
+/* --- month helpers --- */
+eq("shift back over year", Calc.shiftMonth("2026-01", -1), "2025-12");
+eq("shift forward over year", Calc.shiftMonth("2026-12", 1), "2027-01");
+eq("month from Date", Calc.monthKeyOf({ date:"2026-10-05" }), "2026-10");
+eq("month from links", Calc.monthKeyOf({ monthName:"October", year:"2026" }), "2026-10");
+eq("month link with emoji", Calc.monthKeyOf({ monthName:"🗓️ October", year:"2026" }), "2026-10");
+eq("month link, year from createdTime", Calc.monthKeyOf({ monthName:"October", createdTime:"2026-10-01T01:00:00.000Z" }), "2026-10");
+eq("fallback createdTime", Calc.monthKeyOf({ createdTime:"2026-10-01T01:00:00.000Z" }), "2026-10");
+eq("no data → null", Calc.monthKeyOf({}), null);
+
+/* --- formatting --- */
+eq("fmtUZS", Calc.fmtUZS(5300000), "5 300 000 сум");
+eq("fmtSigned +", Calc.fmtSigned(300000), "+300 000 сум");
+eq("fmtSigned −", Calc.fmtSigned(-300000), "−300 000 сум");
+eq("fmtShort mln", Calc.fmtShort(9550000), "9,55 млн");
+eq("fmtShort round mln", Calc.fmtShort(5000000), "5 млн");
+eq("fmtShort thousands", Calc.fmtShort(-300000), "−300 тыс");
+eq("fmtPct", Calc.fmtPct(6), "+6%");
+eq("fmtPct null", Calc.fmtPct(null), "—");
+
+const failed = results.filter(r => !r.pass);
+document.getElementById("sum").innerHTML = failed.length
+  ? '<span class="fail">' + failed.length + " из " + results.length + " не прошли</span>"
+  : '<span class="ok">Все ' + results.length + " тестов прошли ✓</span>";
+document.getElementById("log").innerHTML = results.map(r => r.pass
+  ? '<span class="ok">✓</span> ' + r.name
+  : '<span class="fail">✗ ' + r.name + "\n   получено: " + JSON.stringify(r.got) + "\n   ожидалось: " + JSON.stringify(r.want) + "</span>"
+).join("\n");
+window.TEST_RESULT = { total: results.length, failed: failed.map(r => r.name) };
+</script>
+</body>
+</html>

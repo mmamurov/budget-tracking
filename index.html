@@ -146,6 +146,73 @@ button.save:disabled{opacity:.6}
 .seg button.active{background:var(--card);color:var(--text);box-shadow:var(--shadow)}
 .queuebadge{font-size:13px;color:var(--text2);text-align:center;margin-top:8px}
 #app{display:none}
+
+/* static-plan deviation indicator (header) */
+header{gap:8px}
+.dev{min-width:66px;height:40px;border:none;border-radius:12px;padding:0 9px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;
+  background:var(--chip);color:var(--text);font-variant-numeric:tabular-nums;font-family:inherit}
+.dev .v{font-size:15px;font-weight:800}
+.dev .s{font-size:10.5px;font-weight:600;color:var(--text2);white-space:nowrap}
+.dev.over{background:var(--chip);background:color-mix(in srgb,var(--expense) 15%,var(--card));color:var(--expense)}
+.dev.under{background:var(--chip);background:color-mix(in srgb,var(--income) 15%,var(--card));color:var(--income)}
+.dev.muted .v{color:var(--text2)}
+
+/* quick actions under tabs */
+.quick{display:flex;gap:8px;margin:10px 0 0}
+.qbtn{flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:6px;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px 12px;
+  font-size:14px;font-weight:600;color:var(--text);cursor:pointer;box-shadow:var(--shadow);font-family:inherit}
+.qbtn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qbtn b{font-weight:700;color:var(--text2);font-size:13px;white-space:nowrap}
+#statsBtn{flex:0 0 auto}
+
+/* sheets: static plan & statistics */
+.sheet-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.sheet-h h2{margin:0}
+.sheet-h .iconbtn{width:36px;height:36px;font-size:16px}
+.mnav{display:flex;align-items:center;justify-content:space-between;background:var(--chip);border-radius:12px;padding:3px;margin-bottom:12px}
+.mnav button{border:none;background:transparent;width:44px;height:34px;font-size:20px;color:var(--text);cursor:pointer;border-radius:9px}
+.mnav button:disabled{opacity:.25}
+.mnav b{font-size:15px}
+.card{background:var(--bg);border-radius:14px;padding:10px 14px;margin-bottom:10px}
+.kv{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 0}
+.kv>span{color:var(--text2);font-size:14px}
+.kv b{font-variant-numeric:tabular-nums;font-size:16px;text-align:right}
+.kv small{display:block;font-size:12px;color:var(--text2);font-weight:500}
+.bar{height:6px;border-radius:3px;background:var(--chip);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--income);border-radius:3px}
+.bar i.over,.bar.exp i{background:var(--expense)}
+.pos{color:var(--income)} .neg{color:var(--expense)}
+.srow{background:var(--bg);border-radius:14px;padding:11px 13px;margin-bottom:8px;cursor:pointer}
+.srow .top,.srow .sub{display:flex;justify-content:space-between;gap:10px}
+.srow .nm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow .am{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.srow .am span{color:var(--text2);font-weight:500}
+.srow .sub{font-size:13px;color:var(--text2);margin-top:2px}
+.edit{margin-top:10px;cursor:default}
+.edit .two{display:flex;gap:8px}
+.edit .two>*{flex:1;min-width:0}
+.edit .btn{margin-top:10px}
+.note{font-size:13px;color:var(--text2);background:var(--bg);border-radius:12px;padding:10px 12px;margin:10px 0}
+.note.warn{color:var(--text);border-left:3px solid #f59e0b}
+.note a{font-weight:600}
+.state{text-align:center;color:var(--text2);padding:24px 8px;font-size:14px}
+.chart{width:100%;height:auto;display:block;margin-top:4px}
+.chart .inc{fill:var(--income)} .chart .exp{fill:var(--expense)}
+.chart .ax{fill:var(--text2);font-size:10px}
+.chart g.m{cursor:pointer;opacity:.38} .chart g.m.on{opacity:1}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--text2);margin:2px 2px 12px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+.cat{padding:10px 2px;border-bottom:1px solid var(--border);cursor:pointer}
+.cat:last-child{border-bottom:none}
+.cat .top{display:flex;justify-content:space-between;gap:8px;font-size:15px}
+.cat .top b{white-space:nowrap;font-variant-numeric:tabular-nums}
+.cat .meta{font-size:12px;color:var(--text2);margin-top:4px}
+.ops{margin-top:6px;font-size:13px}
+.ops div{display:flex;justify-content:space-between;gap:8px;padding:4px 0;color:var(--text2)}
+.ops div span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ops div b{color:var(--text);font-weight:600;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -153,11 +220,16 @@ button.save:disabled{opacity:.6}
   <header>
     <h1 id="title">Расходы</h1>
     <div class="hbtns">
+      <button class="dev muted" id="devBtn" aria-label="Отклонение от плана статичных расходов"><span class="v">…</span><span class="s">план</span></button>
       <button class="iconbtn" id="themeBtn" aria-label="Тёмная тема">☾</button>
       <button class="iconbtn" id="settingsBtn" aria-label="Настройки">⚙︎</button>
     </div>
   </header>
   <div class="tabs" id="tabs"></div>
+  <div class="quick">
+    <button class="qbtn" id="staticBtn"><span>📌 Статичные</span><b id="staticSum"></b></button>
+    <button class="qbtn" id="statsBtn"><span>📊 Статистика</span></button>
+  </div>
   <div id="form"></div>
   <div class="queuebadge" id="queueBadge" style="display:none"></div>
   <div class="recent" id="recent"></div>
@@ -196,6 +268,35 @@ button.save:disabled{opacity:.6}
   </div>
 </div>
 
+<!-- Static expenses (plan vs fact) -->
+<div class="modal sheetmodal" id="staticModal">
+  <div class="sheet">
+    <div class="sheet-h">
+      <h2>Статичные расходы</h2>
+      <div class="hbtns">
+        <button class="iconbtn" data-reload aria-label="Обновить">↻</button>
+        <button class="iconbtn" data-close aria-label="Закрыть">✕</button>
+      </div>
+    </div>
+    <div id="staticBody"></div>
+  </div>
+</div>
+
+<!-- Statistics -->
+<div class="modal sheetmodal" id="statsModal">
+  <div class="sheet">
+    <div class="sheet-h">
+      <h2>Статистика</h2>
+      <div class="hbtns">
+        <button class="iconbtn" data-reload aria-label="Обновить">↻</button>
+        <button class="iconbtn" data-close aria-label="Закрыть">✕</button>
+      </div>
+    </div>
+    <div id="statsBody"></div>
+  </div>
+</div>
+
+<script src="calc.js"></script>
 <script>
 "use strict";
 /* ============ storage & state ============ */
@@ -577,6 +678,15 @@ async function findStaticRecord(table, fields, auto){
   const j = await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id) + qs);
   return j.records[0] || null;
 }
+/* "Fuel" + one more payment → "Fuel 2x"; "Fuel 2x" → "Fuel 3x"; a new note is appended once */
+function staticDescAfterAdd(oldDesc, note){
+  let base = String(oldDesc || "").trim(), count = 1;
+  const m = base.match(/^(.*\S)?\s*(\d+)x$/);
+  if(m){ base = (m[1] || "").trim(); count = parseInt(m[2], 10) || 1; }
+  const nd = String(note || "").trim();
+  if(nd && !base.toLowerCase().includes(nd.toLowerCase())) base = base ? base + ", " + nd : nd;
+  return { desc: (base ? base + " " : "") + (count + 1) + "x", count: count + 1 };
+}
 async function persist(table, fields, isStatic, auto){
   await applyAutoLinks(table, fields, auto);
   if(isStatic){
@@ -584,15 +694,11 @@ async function persist(table, fields, isStatic, auto){
     if(r){
       const old = Number(r.fields["Price"]) || 0;
       const add = Number(fields["Price"]) || 0;
-      let base = String(r.fields["Description"] || "").trim(), count = 1;
-      const m = base.match(/^(.*\S)?\s*(\d+)x$/);
-      if(m){ base = (m[1] || "").trim(); count = parseInt(m[2], 10) || 1; }
-      const nd = (fields["Description"] || "").trim();
-      if(nd && !base.toLowerCase().includes(nd.toLowerCase())) base = base ? base + ", " + nd : nd;
-      const patch = { Price: old + add, Description: (base ? base + " " : "") + (count + 1) + "x" };
+      const d = staticDescAfterAdd(r.fields["Description"], fields["Description"]);
+      const patch = { Price: old + add, Description: d.desc };
       await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id) + "/" + r.id,
         { method: "PATCH", body: JSON.stringify({ fields: patch, typecast: true }) });
-      return { updated: true, total: old + add, count: count + 1 };
+      return { updated: true, total: old + add, count: d.count };
     }
   }
   await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id),
@@ -639,7 +745,7 @@ async function save(){
     } else {
       toast("Сохранено ✓");
     }
-    vibrate(); resetAfterSave(f); loadRecent();
+    vibrate(); resetAfterSave(f); loadRecent(); loadData(true);
   }catch(e){
     if(e.status === 401 || e.status === 403 || e.status === 422){
       toast("Ошибка: " + e.message, true);
@@ -671,7 +777,7 @@ async function flushQueue(){
     }catch(e){ break; }
   }
   updateQueueBadge();
-  if(!state.queue.length && q.length){ toast("Отложенные записи отправлены ✓"); loadRecent(); }
+  if(!state.queue.length && q.length){ toast("Отложенные записи отправлены ✓"); loadRecent(); loadData(true); }
 }
 function updateQueueBadge(){
   const b = $("#queueBadge");
@@ -777,6 +883,356 @@ $("#cfgRefresh").onclick = async () => {
   }catch(e){ toast("Ошибка: " + e.message, true); }
 };
 
+/* ============ data: all records for statistics & static plan ============ */
+/* Static rows are created monthly by the Airtable automation "Static expenses":
+   Static = planned amount, Price = what was actually spent (summed by persist()).
+   Everything below only reads those fields and patches single records by id. */
+const NUMERIC = new Set(["number","currency"]);
+const MONTHS_DAT = ["январю","февралю","марту","апрелю","маю","июню","июлю","августу","сентябрю","октябрю","ноябрю","декабрю"];
+const data = { status: "idle", recs: [], error: null, loadedAt: 0, promise: null };
+const ui = { statsKind: "exp", openCat: null, openStatic: null };
+state.month = curMonth();
+
+function curMonth(){ const d = new Date(); return Calc.ym(d.getFullYear(), d.getMonth() + 1); }
+function expTable(){ return state.schema && state.schema.find(t => /expense/i.test(t.name)); }
+function incTable(){ return state.schema && state.schema.find(t => /income/i.test(t.name) && !/expense/i.test(t.name)); }
+function fmtN(n){ return Calc.fmtUZS(n).replace(/ сум$/, ""); }
+function parseAmount(v){
+  const s = String(v || "").replace(",", ".").replace(/\s/g, "");
+  if(!s) return null;
+  const n = parseFloat(s); return isNaN(n) ? NaN : n;
+}
+function fieldMap(t, kind){
+  const f = t.fields, by = re => f.find(x => re.test(x.name.trim()));
+  const sel = f.filter(x => x.type === "singleSelect" && !DETAIL_NAMES.test(x.name.trim()) && !/income/i.test(x.name));
+  return {
+    price: f.find(x => /^(price|amount|sum|cost|value)$/i.test(x.name.trim()) && NUMERIC.has(x.type)) || f.find(x => NUMERIC.has(x.type)),
+    plan: kind === "exp" ? f.find(x => /^static$/i.test(x.name.trim()) && NUMERIC.has(x.type)) : null,
+    type: by(/^type$/i),
+    cat: kind === "inc" ? (sel[0] || f.find(x => x.type === "singleSelect" && /income/i.test(x.name))) : sel[0],
+    inc: kind === "exp" ? f.find(x => x.type === "singleSelect" && /income/i.test(x.name)) : null,  // legacy incomes inside Expenses
+    date: f.find(x => x.type === "date" || x.type === "dateTime"),
+    desc: by(/^(description|note|notes|name|title)$/i),
+    month: monthField(t), year: yearField(t)
+  };
+}
+async function listAll(table, fields){
+  let out = [], offset = null;
+  do{
+    const qs = "?pageSize=100" + fields.map(n => "&fields%5B%5D=" + encodeURIComponent(n)).join("")
+      + (offset ? "&offset=" + encodeURIComponent(offset) : "");
+    const j = await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id) + qs);
+    out = out.concat(j.records); offset = j.offset;
+  } while(offset);
+  return out;
+}
+async function linkNames(fl, memo){
+  const lt = fl && linkedTableOf(fl);
+  if(!lt || !lt.fields.length) return {};
+  if(!memo[lt.id]){
+    const p = lt.fields[0].name;
+    memo[lt.id] = listAll(lt, [p]).then(rs => Object.fromEntries(rs.map(r => [r.id, String(r.fields[p] ?? "")])));
+  }
+  return memo[lt.id];
+}
+function normalize(r, m, kind, names, table){
+  const f = r.fields, val = fl => fl ? f[fl.name] : undefined;
+  const link = fl => {
+    const v = val(fl);
+    if(Array.isArray(v)) return v.length ? ((names[fl.name] || {})[v[0]] ?? null) : null;
+    return v == null ? null : String(v);
+  };
+  const legacyInc = m.inc ? val(m.inc) : null;
+  const date = val(m.date) || null;
+  return {
+    id: r.id, tableId: table.id, kind: legacyInc ? "inc" : kind,
+    price: Calc.num(val(m.price)), plan: Calc.num(val(m.plan)),
+    type: val(m.type) || null, cat: legacyInc || val(m.cat) || null,
+    desc: String(val(m.desc) || "").trim(), date: date ? String(date).slice(0, 10) : null,
+    month: Calc.monthKeyOf({ date, monthName: link(m.month), year: link(m.year), createdTime: r.createdTime })
+  };
+}
+function loadData(force){
+  if(!state.cfg || !state.schema) return Promise.resolve();
+  if(data.promise && !force) return data.promise;
+  data.status = "loading"; refreshViews();
+  const run = (async () => {
+    try{
+      const recs = [], memo = {};
+      for(const [t, kind] of [[expTable(), "exp"], [incTable(), "inc"]]){
+        if(!t) continue;
+        const m = fieldMap(t, kind);
+        const fields = [...new Set(Object.values(m).filter(Boolean).map(x => x.name))];
+        const [rows, mN, yN] = await Promise.all([listAll(t, fields), linkNames(m.month, memo), linkNames(m.year, memo)]);
+        const names = {};
+        if(m.month) names[m.month.name] = mN;
+        if(m.year) names[m.year.name] = yN;
+        rows.forEach(r => recs.push(normalize(r, m, kind, names, t)));
+      }
+      if(data.promise !== run) return;   // a newer load superseded this one
+      data.recs = recs; data.status = "ready"; data.error = null; data.loadedAt = Date.now();
+    }catch(e){
+      if(data.promise !== run) return;
+      data.status = "error"; data.error = e.message || String(e);
+    }
+    data.promise = null; refreshViews();
+  })();
+  data.promise = run;
+  return run;
+}
+
+/* ============ views ============ */
+function refreshViews(){
+  renderDev(); renderQuick();
+  if($("#staticModal").classList.contains("show")) renderStatic();
+  if($("#statsModal").classList.contains("show")) renderStats();
+}
+function hasData(){ return data.loadedAt > 0; }
+function monthShort(key){ return Calc.MONTHS_RU[+key.slice(5) - 1].slice(0, 3).toLowerCase(); }
+
+function renderDev(){
+  const b = $("#devBtn");
+  b.className = "dev";
+  const other = state.month !== curMonth() ? monthShort(state.month) + " " : "";
+  const set = (v, s, cls, label) => {
+    if(cls) b.classList.add(cls);
+    b.innerHTML = '<span class="v">' + v + '</span><span class="s">' + esc(s) + '</span>';
+    b.setAttribute("aria-label", label); b.title = label;
+  };
+  if(!hasData()){
+    if(data.status === "error") return set("!", "нет данных", "muted", "Не удалось загрузить данные: " + data.error);
+    return set("…", "план", "muted", "Загрузка плана статичных расходов");
+  }
+  const s = Calc.staticSummary(data.recs, state.month), ml = Calc.monthLabel(state.month);
+  if(s.status === "empty") return set("—", other + "нет плана", "muted", "За " + ml + " нет статичных расходов");
+  if(s.status === "noplan") return set("—", other + "план 0", "muted", "У статичных записей за " + ml + " не указан план");
+  const sign = s.diff > 0 ? "+" : s.diff < 0 ? "−" : "";
+  set(Calc.fmtPct(s.pct), other + sign + Calc.fmtShort(Math.abs(s.diff)), s.diff > 0 ? "over" : s.diff < 0 ? "under" : "",
+    ml + ": план " + Calc.fmtUZS(s.plan) + ", факт " + Calc.fmtUZS(s.fact) + ", отклонение " + Calc.fmtSigned(s.diff) + " (" + Calc.fmtPct(s.pct) + ")");
+}
+function renderQuick(){
+  const el = $("#staticSum");
+  if(!hasData()){ el.textContent = data.status === "error" ? "!" : "…"; return; }
+  const s = Calc.staticSummary(data.recs, state.month);
+  el.textContent = s.plan > 0 ? Calc.fmtShort(s.plan) : "";
+}
+function monthNav(){
+  const atMax = state.month >= curMonth();
+  return '<div class="mnav"><button data-month="-1" aria-label="Предыдущий месяц">‹</button><b>'
+    + esc(Calc.monthLabel(state.month)) + '</b><button data-month="1" aria-label="Следующий месяц"' + (atMax ? " disabled" : "") + '>›</button></div>';
+}
+function stateBlock(){
+  if(data.status === "error") return '<div class="state">Не удалось загрузить данные из Airtable.<br>' + esc(data.error)
+    + '<br><button class="btn ghost" data-reload>Повторить</button></div>';
+  return '<div class="state">Загрузка…</div>';
+}
+
+/* ---- static expenses sheet ---- */
+function automationUrl(){ return "https://airtable.com/" + encodeURIComponent(state.cfg.baseId) + "/automations"; }
+function renderStatic(){
+  const box = $("#staticBody");
+  // keep what the user is typing if data refreshes underneath an open editor
+  const draft = {};
+  box.querySelectorAll(".edit [data-k]").forEach(i => draft[i.dataset.k] = i.value);
+  let h = monthNav();
+  if(!hasData()){ box.innerHTML = h + stateBlock(); return; }
+  const s = Calc.staticSummary(data.recs, state.month);
+  if(s.status === "empty"){
+    h += '<div class="state">За ' + esc(Calc.monthLabel(state.month).toLowerCase()) + ' статичных записей нет.<br>'
+      + 'Автоматизация создаёт их 1-го числа месяца.</div>';
+  } else {
+    if(s.status === "ok"){
+      const cls = s.diff > 0 ? "neg" : s.diff < 0 ? "pos" : "";
+      h += '<div class="card">'
+        + '<div class="kv"><span>План на месяц</span><b>' + Calc.fmtUZS(s.plan) + '</b></div>'
+        + '<div class="kv"><span>Факт</span><b>' + Calc.fmtUZS(s.fact) + '</b></div>'
+        + '<div class="kv"><span>Отклонение</span><b class="' + cls + '">' + Calc.fmtSigned(s.diff) + ' (' + Calc.fmtPct(s.pct) + ')</b></div>'
+        + '<div class="bar"><i class="' + (s.diff > 0 ? "over" : "") + '" style="width:' + Math.min(100, s.fact / s.plan * 100).toFixed(1) + '%"></i></div>'
+        + '</div>';
+      if(s.withoutFact) h += '<div class="note">Без факта: ' + s.withoutFact + ' — трат ещё не было или они не внесены. Они считаются как 0.</div>';
+    } else {
+      h += '<div class="note warn">У статичных записей за этот месяц не заполнен план (поле Static), поэтому отклонение не считается.</div>';
+    }
+    s.items.concat(s.unplanned).forEach(r => { h += staticRow(r); });
+    if(s.unplanned.length) h += '<div class="note warn">Без плана: ' + s.unplanned.length + ' запис.' + ' на ' + Calc.fmtUZS(s.unplannedSum)
+      + '. Они не входят в расчёт отклонения — укажите план, если это регулярный платёж.</div>';
+  }
+  h += '<div class="note">План создаёт автоматизация «Static expenses» 1-го числа, суммы хранятся в её настройках. '
+    + 'Изменения здесь касаются только выбранного месяца. Чтобы поменять план на следующие месяцы, '
+    + '<a href="' + automationUrl() + '" target="_blank" rel="noopener">откройте автоматизацию в Airtable ↗</a></div>';
+  box.innerHTML = h;
+  const ed = box.querySelector(".edit");
+  if(ed){
+    ed.querySelectorAll("[data-k]").forEach(i => { if(i.dataset.k in draft) i.value = draft[i.dataset.k]; });
+    ed.querySelectorAll('[inputmode="decimal"]').forEach(attachAmountFormat);
+  }
+}
+function staticRow(r){
+  const open = ui.openStatic === r.id, planned = r.plan > 0;
+  const diff = r.price - r.plan;
+  let h = '<div class="srow" data-id="' + r.id + '">'
+    + '<div class="top"><span class="nm">' + esc(r.desc || r.cat || "—") + '</span><span class="am">' + fmtN(r.price)
+    + (planned ? ' <span>/ ' + fmtN(r.plan) + '</span>' : '') + '</span></div>'
+    + '<div class="sub"><span>' + esc(r.cat || "Без категории") + '</span>'
+    + (planned ? '<span class="' + (diff > 0 ? "neg" : diff < 0 ? "pos" : "") + '">' + (diff ? Calc.fmtSigned(diff) : "по плану") + '</span>' : '<span>без плана</span>')
+    + '</div>';
+  if(planned) h += '<div class="bar"><i class="' + (diff > 0 ? "over" : "") + '" style="width:' + Math.min(100, r.price / r.plan * 100).toFixed(1) + '%"></i></div>';
+  if(open){
+    h += '<div class="edit">'
+      + '<div class="lbl">Добавить трату к факту</div><input class="txt" data-k="add" inputmode="decimal" placeholder="0" autocomplete="off">'
+      + '<div class="two"><div><div class="lbl">План (Static)</div><input class="txt" data-k="plan" inputmode="decimal" value="' + (r.plan ? groupAmount(r.plan) : "") + '"></div>'
+      + '<div><div class="lbl">Факт (Price)</div><input class="txt" data-k="fact" inputmode="decimal" value="' + (r.price ? groupAmount(r.price) : "") + '"></div></div>'
+      + '<div class="lbl">Описание</div><input class="txt" data-k="desc" value="' + esc(r.desc) + '" autocomplete="off">'
+      + '<div class="two"><button class="btn ghost" data-act="cancel">Отмена</button><button class="btn" data-act="save">Сохранить</button></div>'
+      + '</div>';
+  }
+  return h + '</div>';
+}
+async function saveStatic(id, btn){
+  const r = data.recs.find(x => x.id === id);
+  const t = r && state.schema.find(x => x.id === r.tableId);
+  if(!t) return;
+  const m = fieldMap(t, "exp"), ed = $("#staticBody .edit");
+  const v = k => ed.querySelector('[data-k="' + k + '"]').value;
+  const add = parseAmount(v("add")), plan = parseAmount(v("plan")), fact = parseAmount(v("fact"));
+  if([add, plan, fact].some(x => Number.isNaN(x))){ toast("Проверьте суммы", true); return; }
+  if(plan !== null && plan < 0){ toast("План не может быть отрицательным", true); return; }
+  const patch = {};
+  let newFact = fact === null ? 0 : fact;
+  let desc = v("desc").trim();
+  if(add){
+    newFact += add;
+    if(desc === r.desc && m.desc) desc = staticDescAfterAdd(r.desc, "").desc;   // same "Nx" counter as the main form
+  }
+  if(m.price && newFact !== r.price) patch[m.price.name] = newFact;
+  const planChanged = m.plan && (plan || 0) !== r.plan;
+  if(planChanged) patch[m.plan.name] = plan || 0;
+  if(m.desc && desc !== r.desc) patch[m.desc.name] = desc;
+  if(!Object.keys(patch).length){ ui.openStatic = null; renderStatic(); return; }
+  btn.disabled = true;
+  try{
+    await api("/" + state.cfg.baseId + "/" + encodeURIComponent(t.id) + "/" + id,
+      { method: "PATCH", body: JSON.stringify({ fields: patch, typecast: true }) });
+    ui.openStatic = null;
+    toast(planChanged ? "План за " + Calc.monthLabel(state.month).toLowerCase() + " обновлён ✓" : "Сохранено ✓");
+    vibrate();
+    await loadData(true);
+    loadRecent();
+  }catch(e){
+    toast("Не сохранено: " + e.message, true);   // never pretend it was saved
+    btn.disabled = false;
+  }
+}
+$("#staticBody").addEventListener("click", e => {
+  const act = e.target.closest("[data-act]");
+  if(act){
+    if(act.dataset.act === "cancel"){ ui.openStatic = null; renderStatic(); }
+    if(act.dataset.act === "save") saveStatic(act.closest(".srow").dataset.id, act);
+    return;
+  }
+  if(e.target.closest(".edit") || e.target.closest("a")) return;
+  const row = e.target.closest(".srow");
+  if(row){ ui.openStatic = ui.openStatic === row.dataset.id ? null : row.dataset.id; renderStatic();
+    const i = $("#staticBody .edit [data-k='add']"); if(i) i.focus(); }
+});
+
+/* ---- statistics sheet ---- */
+function changeLine(cur, prev, kind){
+  const pk = Calc.shiftMonth(state.month, -1), to = "к " + MONTHS_DAT[+pk.slice(5) - 1];
+  if(!prev && !cur) return "";
+  if(!prev) return '<small>в прошлом месяце: 0</small>';
+  const c = Calc.change(cur, prev);
+  if(!c.abs) return '<small>как ' + to.replace("к ", "в ") + '</small>';
+  const up = c.abs > 0, good = kind === "exp" ? !up : up;
+  return '<small class="' + (good ? "pos" : "neg") + '">' + (up ? "▲ " : "▼ ") + Calc.fmtPct(c.pct).replace(/^[+−]/, "")
+    + ' · ' + (up ? "+" : "−") + Calc.fmtShort(Math.abs(c.abs)) + ' ' + to + '</small>';
+}
+function chartSVG(hist){
+  const W = 320, H = 130, top = 6, bot = 18, ch = H - top - bot, gw = W / hist.length;
+  const max = Math.max(1, ...hist.map(m => Math.max(m.inc, m.exp, 0)));
+  const bw = Math.min(16, (gw - 14) / 2);
+  return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Доходы и расходы по месяцам">'
+    + hist.map((m, i) => {
+      const x = i * gw + gw / 2, hi = Math.max(0, m.inc) / max * ch, he = Math.max(0, m.exp) / max * ch;
+      return '<g class="m' + (m.key === state.month ? " on" : "") + '" data-key="' + m.key + '">'
+        + '<rect x="' + (i * gw) + '" y="0" width="' + gw + '" height="' + H + '" fill="transparent"/>'
+        + '<rect class="inc" x="' + (x - bw - 1).toFixed(1) + '" y="' + (top + ch - hi).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hi.toFixed(1) + '" rx="2"/>'
+        + '<rect class="exp" x="' + (x + 1).toFixed(1) + '" y="' + (top + ch - he).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + he.toFixed(1) + '" rx="2"/>'
+        + '<text class="ax" x="' + x.toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">' + monthShort(m.key) + '</text>'
+        + '<title>' + esc(Calc.monthLabel(m.key)) + ': доходы ' + Calc.fmtUZS(m.inc) + ', расходы ' + Calc.fmtUZS(m.exp) + '</title></g>';
+    }).join("") + '</svg>';
+}
+function renderStats(){
+  const box = $("#statsBody");
+  let h = monthNav();
+  if(!hasData()){ box.innerHTML = h + stateBlock(); return; }
+  const t = Calc.totals(data.recs, state.month), p = Calc.totals(data.recs, Calc.shiftMonth(state.month, -1));
+  h += '<div class="card">'
+    + '<div class="kv"><span>Доходы</span><b class="pos">' + Calc.fmtUZS(t.inc) + changeLine(t.inc, p.inc, "inc") + '</b></div>'
+    + '<div class="kv"><span>Расходы</span><b class="neg">' + Calc.fmtUZS(t.exp) + changeLine(t.exp, p.exp, "exp") + '</b></div>'
+    + '<div class="kv"><span>Разница</span><b class="' + (t.net < 0 ? "neg" : "") + '">' + Calc.fmtSigned(t.net) + changeLine(t.net, p.net, "inc") + '</b></div>'
+    + '</div>';
+  // last 6 months; window follows the selected month only once it scrolls out of view
+  const cur = curMonth(), end = state.month <= Calc.shiftMonth(cur, -6) ? state.month : cur;
+  h += chartSVG(Calc.history(data.recs, end, 6))
+    + '<div class="legend"><span><i style="background:var(--income)"></i>Доходы</span><span><i style="background:var(--expense)"></i>Расходы</span></div>';
+  h += '<div class="lbl">По категориям</div><div class="seg" id="statsSeg"><button data-kind="exp"' + (ui.statsKind === "exp" ? ' class="active"' : '') + '>Расходы</button>'
+    + '<button data-kind="inc"' + (ui.statsKind === "inc" ? ' class="active"' : '') + '>Доходы</button></div>';
+  const bc = Calc.byCategory(data.recs, state.month, ui.statsKind);
+  if(!bc.groups.length){
+    h += '<div class="state">' + (ui.statsKind === "exp" ? "Расходов" : "Доходов") + ' за этот месяц нет.</div>';
+  } else {
+    h += '<div style="margin-top:6px">' + bc.groups.map((g, i) => {
+      const open = ui.openCat === ui.statsKind + ":" + g.name;
+      return '<div class="cat" data-i="' + i + '"><div class="top"><span>' + esc(g.name) + '</span><b>' + Calc.fmtUZS(g.sum) + '</b></div>'
+        + '<div class="bar' + (ui.statsKind === "exp" ? " exp" : "") + '"><i style="width:' + Math.max(1, g.share).toFixed(1) + '%"></i></div>'
+        + '<div class="meta">' + g.share.toFixed(g.share < 10 ? 1 : 0).replace(".", ",") + '% · ' + g.items.length + ' ' + plural(g.items.length, "операция", "операции", "операций") + (open ? " ▾" : " ▸") + '</div>'
+        + (open ? '<div class="ops">' + g.items.map(r => '<div><span>' + esc(r.desc || "—")
+            + ' · ' + (r.date ? r.date.slice(8, 10) + "." + r.date.slice(5, 7) : Calc.isStatic(r) ? "статичный" : "без даты")
+            + '</span><b>' + fmtN(r.price) + '</b></div>').join("") + '</div>' : '')
+        + '</div>';
+    }).join("") + '</div>';
+  }
+  const undated = data.recs.filter(r => !r.month && r.price).length;
+  if(undated) h += '<div class="note">Не учтено записей без даты и месяца: ' + undated + '.</div>';
+  box.innerHTML = h;
+  box._groups = bc.groups;
+}
+function plural(n, one, few, many){
+  const a = n % 10, b = n % 100;
+  return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many;
+}
+$("#statsBody").addEventListener("click", e => {
+  const bar = e.target.closest("g.m");
+  if(bar){ state.month = bar.dataset.key; ui.openCat = null; refreshViews(); return; }
+  const seg = e.target.closest("[data-kind]");
+  if(seg){ ui.statsKind = seg.dataset.kind; ui.openCat = null; renderStats(); return; }
+  const c = e.target.closest(".cat");
+  if(c){
+    const g = $("#statsBody")._groups[+c.dataset.i], key = ui.statsKind + ":" + g.name;
+    ui.openCat = ui.openCat === key ? null : key; renderStats();
+  }
+});
+
+/* ---- sheet plumbing ---- */
+function openSheet(sel){
+  $(sel).classList.add("show");
+  if(!data.promise && Date.now() - data.loadedAt > 60000) loadData();
+  refreshViews();
+}
+document.querySelectorAll(".sheetmodal").forEach(m => m.addEventListener("click", e => {
+  if(e.target === m || e.target.closest("[data-close]")){ m.classList.remove("show"); ui.openStatic = null; return; }
+  if(e.target.closest("[data-reload]")){ loadData(true); return; }
+  const mb = e.target.closest("[data-month]");
+  if(mb && !mb.disabled){ state.month = Calc.shiftMonth(state.month, +mb.dataset.month); ui.openStatic = null; ui.openCat = null; refreshViews(); }
+}));
+$("#staticBtn").onclick = () => openSheet("#staticModal");
+$("#statsBtn").onclick = () => openSheet("#statsModal");
+$("#devBtn").onclick = () => openSheet("#staticModal");
+document.addEventListener("visibilitychange", () => {
+  if(!document.hidden && state.cfg && Date.now() - data.loadedAt > 5 * 60000) loadData();
+});
+
 /* ============ boot ============ */
 function boot(){
   if(!state.cfg || !state.schema){ openSettings(true); return; }
@@ -785,7 +1241,7 @@ function boot(){
     const exp = state.schema.find(t => /expense/i.test(t.name)) || state.schema[0];
     state.tableId = exp.id;
   }
-  renderTabs(); renderForm(); loadRecent(); flushQueue(); updateQueueBadge();
+  renderTabs(); renderForm(); loadRecent(); flushQueue(); updateQueueBadge(); loadData();
   // refresh schema in background (picks up new select options)
   fetchSchema().then(s => { state.schema = s; LS.set("schema", s); }).catch(()=>{});
 }
