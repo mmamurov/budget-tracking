@@ -14,6 +14,7 @@ pre{white-space:pre-wrap;font-size:13px}
 <h1 id="sum">…</h1>
 <pre id="log"></pre>
 <script src="calc.js"></script>
+<script src="quotes.js"></script>
 <script>
 "use strict";
 const results = [];
@@ -156,6 +157,22 @@ const night = Calc.sunTheme(new Date("2026-10-22T18:00:00Z"), ...TAS);
 eq("after sunset next flip = tomorrow's sunrise", hm(night.next) < "07:10" && night.next > new Date("2026-10-23T00:00:00Z"), true);
 eq("before sunrise next flip = today's sunrise", Calc.sunTheme(new Date("2026-10-22T00:00:00Z"), ...TAS).next.valueOf(), st.sunrise.valueOf());
 eq("polar night handled", Calc.sunTheme(new Date("2026-12-21T12:00:00Z"), 78.2, 15.6).theme, "dark");
+
+/* --- module quotes: real Airtable table names (with emoji) → source --- */
+const qsrc = n => (Quotes.quoteFor(n) || {}).src || null;
+eq("Expenses quote", qsrc("💸 Expenses"), "Коран, 17:26");
+eq("Incomes quote", qsrc("💵 Incomes"), "Коран, 4:29");
+eq("Monthly report quote", qsrc("🗓️ Monthly report"), "Коран, 17:29");
+eq("Annually report quote", qsrc("🌏 Annually report"), "Коран, 59:18");
+eq("Debt tracker quote", qsrc("👤 Debt tracker"), "Коран, 2:282");
+eq("Investing quote", Quotes.quoteFor("📈 Investing").text, "…только путём торговли по обоюдному согласию");
+eq("Investing goals → hadith, not the Investing quote", qsrc("📈 Investing goals"), "Сахих аль-Бухари, хадис 1");
+eq("Zakot quote", qsrc("💰 Zakot"), "Коран, 9:103");
+eq("Networth quote", qsrc("💎 Networth"), "Коран, 18:46");
+eq("Net worth spelled apart", qsrc("Net worth"), "Коран, 18:46");
+eq("Networking is not Networth", qsrc("👤 Networking"), null);
+eq("tables without a quote", [qsrc("🛐 Kafforatlar"), qsrc("Meros taqsimoti (Onam)")], [null, null]);
+eq("9 quotes, none duplicated", new Set(Quotes.QUOTES.map(q => q.text)).size, 9);
 
 /* --- month helpers --- */
 eq("shift back over year", Calc.shiftMonth("2026-01", -1), "2025-12");

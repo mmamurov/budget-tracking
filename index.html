@@ -56,6 +56,11 @@ header h1{font-size:20px;margin:0;font-weight:700}
   border:none;font-size:14px;font-weight:600;cursor:pointer}
 .tab.active{background:var(--text);color:var(--bg)}
 
+/* module quote: one quiet line under the tabs */
+.quote{margin:10px 2px 0;padding:1px 0 1px 10px;border-left:2px solid var(--accent);
+  font-size:13px;line-height:1.4;font-style:italic;color:var(--text2)}
+.quote cite{display:block;margin-top:2px;font-size:11.5px;font-style:normal;font-weight:600;letter-spacing:.02em}
+
 #form{margin-top:12px}
 
 /* amount */
@@ -235,6 +240,7 @@ header{gap:8px}
     </div>
   </header>
   <div class="tabs" id="tabs"></div>
+  <p class="quote" id="quote" hidden></p>
   <div class="quick">
     <button class="qbtn" id="staticBtn"><span>📌 Статичные</span><b id="staticSum"></b></button>
     <button class="qbtn" id="statsBtn"><span>📊 Статистика</span></button>
@@ -307,6 +313,7 @@ header{gap:8px}
 </div>
 
 <script src="calc.js"></script>
+<script src="quotes.js"></script>
 <script>
 "use strict";
 /* ============ storage & state ============ */
@@ -664,6 +671,12 @@ function renderForm(){
   $("#saveBtn").textContent = /income/i.test(table.name) ? "Добавить доход" : "Добавить";
   $("#staticBtn").style.display = isExpenses ? "" : "none";
   $("#savebar").style.display = "";
+  renderQuote(table);
+}
+function renderQuote(table){
+  const q = Quotes.quoteFor(table.name), el = $("#quote");
+  el.hidden = !q;
+  if(q) el.innerHTML = "«" + esc(q.text) + "»<cite>" + esc(q.src) + "</cite>";
 }
 
 /* ============ save (with static aggregation) ============ */
