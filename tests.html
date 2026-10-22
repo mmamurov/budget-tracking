@@ -106,6 +106,38 @@ eq("missing category grouped", bc.groups.some(g => g.name === Calc.NO_CAT), true
 eq("zero-sum category hidden", bc.groups.some(g => g.name === "Monthly payment 🔂"), false);
 eq("income categories", Calc.byCategory(recs, "2026-10", "inc").groups.map(g => [g.name, g.sum]), [["Salary 💳", 30000000]]);
 
+/* --- investing (real 📈 Investing rows, Oct 2026) --- */
+const I = (cat, type, invested, profit) => ({ cat, type, invested, profit });
+const inv = [
+  I("Iman Invest","Invested",12950000), I("Iman Invest","Profit",0,187723), I("Iman Invest","Invested",6500000),
+  I("Iman Invest","Profit",0,151455), I("Iman Invest","Invested",3900000), I("Iman Invest","Profit",0,215507),
+  I("Iman Invest","Profit",0,431292), I("Iman Invest","Profit",0,475651), I("Iman Invest","Profit",0,413945),
+  I("Iman Invest","Profit",0,421119), I("Iman Invest","Invested",4493656), I("Iman Invest","Invested",1000000),
+  I("Gold","Gifted",-20000000), I("Iman Invest",null,0,428291), I("Iman Invest","Invested",5000000),
+  I("Gold","Invested",17922000), I("Iman Invest","Invested",10000000), I("Iman Invest","Invested",6000000),
+  I("Iman Invest","Gifted",-15000000)
+].concat(Array.from({ length: 8 }, () => I("Iman Invest","Invested",10000000)));
+const is = Calc.investSummary(inv);
+eq("invest net = Σ Invested.S (Airtable sum)", is.net, 112765656);
+eq("invest profit = Σ Profit (Airtable sum)", is.profit, 2724983);
+eq("invest total = Σ Total (Airtable sum)", is.total, 115490639);
+eq("gifted counted as withdrawn", is.withdrawn, 35000000);
+eq("deposited = net + withdrawn", is.deposited, 147765656);
+near("roi = profit / deposited", is.roi, 1.84);
+eq("by category sorted by total", is.byCat.map(c => c.name), ["Iman Invest","Gold"]);
+eq("gold net", is.byCat[1].total, -2078000);
+eq("empty ledger roi null", Calc.investSummary([]).roi, null);
+
+/* --- goals --- */
+eq("no goal set", Calc.goalProgress(0, 5000000).status, "nogoal");
+eq("goal left", Calc.goalProgress(150000000, 115490639).left, 34509361);
+near("goal pct", Calc.goalProgress(150000000, 115490639).pct, 76.99);
+eq("goal reached", Calc.goalProgress(100, 120), { status:"done", target:100, saved:120, left:0, pct:100 });
+
+/* --- groupSum --- */
+const gs = Calc.groupSum([{ cat:"A", amount:300 }, { cat:"B", amount:100 }, { cat:"A", amount:100 }, { cat:null, amount:0 }]);
+eq("groupSum totals", gs.groups.map(g => [g.name, g.sum, g.share]), [["A",400,80],["B",100,20]]);
+
 /* --- month helpers --- */
 eq("shift back over year", Calc.shiftMonth("2026-01", -1), "2025-12");
 eq("shift forward over year", Calc.shiftMonth("2026-12", 1), "2027-01");

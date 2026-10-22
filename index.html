@@ -37,7 +37,9 @@ body{
   padding-bottom:calc(96px + env(safe-area-inset-bottom));
   transition:background .25s,color .25s;
 }
-.wrap{max-width:480px;margin:0 auto;padding:12px 14px}
+/* standalone iOS app draws under the status bar (black-translucent) — keep content below it */
+.wrap{max-width:480px;margin:0 auto;
+  padding:calc(12px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 12px calc(14px + env(safe-area-inset-left))}
 header{display:flex;align-items:center;justify-content:space-between;padding:6px 0 10px}
 header h1{font-size:20px;margin:0;font-weight:700}
 .iconbtn{background:var(--chip);border:none;border-radius:12px;width:40px;height:40px;
@@ -51,12 +53,7 @@ header h1{font-size:20px;margin:0;font-weight:700}
   border:none;font-size:14px;font-weight:600;cursor:pointer}
 .tab.active{background:var(--text);color:var(--bg)}
 
-/* mode switch */
-.mode{display:flex;background:var(--chip);border-radius:14px;padding:4px;margin:12px 0}
-.mode button{flex:1;border:none;background:transparent;padding:10px;border-radius:10px;
-  font-size:15px;font-weight:700;color:var(--text2);cursor:pointer;transition:all .15s}
-.mode button.active.exp{background:var(--card);color:var(--expense);box-shadow:var(--shadow)}
-.mode button.active.inc{background:var(--card);color:var(--income);box-shadow:var(--shadow)}
+#form{margin-top:12px}
 
 /* amount */
 .amount{background:var(--card);border-radius:18px;padding:18px 16px;margin-bottom:12px;box-shadow:var(--shadow)}
@@ -82,7 +79,8 @@ input.txt,textarea.txt,select.txt{
   width:100%;background:var(--card);border:1px solid var(--border);border-radius:14px;
   padding:12px 14px;font-size:16px;color:var(--text);outline:none;font-family:inherit}
 input.txt:focus,textarea.txt:focus{border-color:var(--accent)}
-input[type="date"].txt{min-height:48px;-webkit-appearance:none;appearance:none}
+input[type="date"].txt{min-height:48px;-webkit-appearance:none;appearance:none;text-align:left}
+input[type="date"].txt::-webkit-date-and-time-value{text-align:left}
 
 details.more{margin-bottom:12px}
 details.more summary{list-style:none;cursor:pointer;font-size:14px;font-weight:600;color:var(--text2);
@@ -122,7 +120,7 @@ button.save:disabled{opacity:.6}
 .rec .p.exp{color:var(--expense)} .rec .p.inc{color:var(--income)}
 
 /* toast */
-#toast{position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-80px);
+#toast{position:fixed;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%) translateY(-200px);
   background:var(--text);color:var(--bg);padding:12px 20px;border-radius:999px;font-weight:700;
   font-size:15px;transition:transform .3s;z-index:50;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:90vw}
 #toast.show{transform:translateX(-50%) translateY(0)}
@@ -209,6 +207,11 @@ header{gap:8px}
 .cat .top{display:flex;justify-content:space-between;gap:8px;font-size:15px}
 .cat .top b{white-space:nowrap;font-variant-numeric:tabular-nums}
 .cat .meta{font-size:12px;color:var(--text2);margin-top:4px}
+.pie{display:flex;justify-content:center;margin:14px 0 4px}
+.pie svg{width:180px;height:180px}
+.pie .pt{fill:var(--text2);font-size:11px}
+.pie .pv{fill:var(--text);font-size:17px;font-weight:800}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px}
 .ops{margin-top:6px;font-size:13px}
 .ops div{display:flex;justify-content:space-between;gap:8px;padding:4px 0;color:var(--text2)}
 .ops div span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -286,7 +289,7 @@ header{gap:8px}
 <div class="modal sheetmodal" id="statsModal">
   <div class="sheet">
     <div class="sheet-h">
-      <h2>Статистика</h2>
+      <h2 id="statsTitle">Статистика</h2>
       <div class="hbtns">
         <button class="iconbtn" data-reload aria-label="Обновить">↻</button>
         <button class="iconbtn" data-close aria-label="Закрыть">✕</button>
@@ -628,37 +631,16 @@ function buildFastForm(table, opts={}){
            amountName: amountF ? amountF.name : null, dateField: dateF || null };
 }
 
-function setMode(m){
-  state.mode = m;
-  document.querySelectorAll(".mode button").forEach(b =>
-    b.classList.toggle("active", b.dataset.mode === m));
-  Object.entries(forms).forEach(([mode, f]) => { if(f) f.root.style.display = mode === m ? "" : "none"; });
-  $("#saveBtn").textContent = m === "income" ? "Добавить доход" : "Добавить";
-}
-
+/* one form per tab: Expenses tab writes expenses, Incomes tab writes incomes */
 function renderForm(){
   const table = currentTable();
   const form = $("#form"); form.innerHTML = ""; forms = {};
   const isExpenses = /expense/i.test(table.name);
-  const incTable = state.schema.find(t => /income/i.test(t.name) && t.id !== table.id);
-
-  if(isExpenses && incTable){
-    // mode switch: expense → Expenses table, income → Incomes table
-    const mode = document.createElement("div"); mode.className = "mode";
-    const be = document.createElement("button"); be.textContent = "− Расход"; be.className = "exp"; be.dataset.mode = "expense";
-    const bi = document.createElement("button"); bi.textContent = "+ Доход"; bi.className = "inc"; bi.dataset.mode = "income";
-    be.onclick = () => { setMode("expense"); vibrate(); };
-    bi.onclick = () => { setMode("income"); vibrate(); };
-    mode.append(be, bi); form.appendChild(mode);
-
-    forms.expense = buildFastForm(table, { skip: ["Incomes", "Static"] });
-    forms.income = buildFastForm(incTable);
-    form.append(forms.expense.root, forms.income.root);
-  } else {
-    forms.expense = buildFastForm(table, isExpenses ? { skip: ["Static"] } : {});
-    form.appendChild(forms.expense.root);
-  }
-  setMode("expense");
+  forms.expense = buildFastForm(table, isExpenses ? { skip: ["Incomes", "Static"] } : {});
+  form.appendChild(forms.expense.root);
+  state.mode = "expense";
+  $("#saveBtn").textContent = /income/i.test(table.name) ? "Добавить доход" : "Добавить";
+  $("#staticBtn").style.display = isExpenses ? "" : "none";
   $("#savebar").style.display = "";
 }
 
@@ -1162,7 +1144,33 @@ function chartSVG(hist){
         + '<title>' + esc(Calc.monthLabel(m.key)) + ': доходы ' + Calc.fmtUZS(m.inc) + ', расходы ' + Calc.fmtUZS(m.exp) + '</title></g>';
     }).join("") + '</svg>';
 }
-function renderStats(){
+/* category colors = the same Airtable select colors the chips use (bright shade, readable on a chart) */
+const PIE_FALLBACK = ["#2D7FF9","#20C933","#FCB400","#F82B60","#8B46FF","#18BFFF","#FF6F2C","#20D9D2","#FF08C2","#666666"];
+function categoryColors(fl, groups){
+  const byName = {};
+  fieldChoices(fl || {}).forEach(c => { if(c.color) byName[c.name] = ATCOLORS[c.color.replace(/Light\d|Dark\d|Bright/, "") + "Bright"]; });
+  const used = new Set();
+  return groups.map((g, i) => {
+    let c = g.name === Calc.NO_CAT ? "#9aa1ad" : byName[g.name];
+    if(!c || used.has(c)) c = PIE_FALLBACK.find(x => !used.has(x)) || PIE_FALLBACK[i % PIE_FALLBACK.length];
+    used.add(c); return c;
+  });
+}
+function pieSVG(groups, colors, total){
+  const R = 52, W = 16, C = 2 * Math.PI * R;
+  let off = 0;
+  const segs = groups.map((g, i) => {
+    const len = total > 0 ? Math.max(0, g.sum) / total * C : 0;
+    const s = '<circle data-i="' + i + '" r="' + R + '" cx="70" cy="70" fill="none" stroke="' + colors[i] + '" stroke-width="' + W
+      + '" stroke-dasharray="' + Math.max(0, len - (groups.length > 1 ? 1.5 : 0)).toFixed(2) + ' ' + C.toFixed(2) + '" stroke-dashoffset="' + (-off).toFixed(2)
+      + '" transform="rotate(-90 70 70)" style="cursor:pointer"><title>' + esc(g.name) + ': ' + Calc.fmtUZS(g.sum) + '</title></circle>';
+    off += len; return s;
+  }).join("");
+  return '<div class="pie"><svg viewBox="0 0 140 140" role="img" aria-label="Доли категорий">' + segs
+    + '<text x="70" y="66" text-anchor="middle" class="pt">Всего</text>'
+    + '<text x="70" y="84" text-anchor="middle" class="pv">' + esc(Calc.fmtShort(total)) + '</text></svg></div>';
+}
+function renderMoneyStats(){
   const box = $("#statsBody");
   let h = monthNav();
   if(!hasData()){ box.innerHTML = h + stateBlock(); return; }
@@ -1182,10 +1190,13 @@ function renderStats(){
   if(!bc.groups.length){
     h += '<div class="state">' + (ui.statsKind === "exp" ? "Расходов" : "Доходов") + ' за этот месяц нет.</div>';
   } else {
+    const st = ui.statsKind === "inc" ? incTable() : expTable();
+    const colors = categoryColors(st && fieldMap(st, ui.statsKind).cat, bc.groups);
+    h += pieSVG(bc.groups, colors, bc.total);
     h += '<div style="margin-top:6px">' + bc.groups.map((g, i) => {
       const open = ui.openCat === ui.statsKind + ":" + g.name;
-      return '<div class="cat" data-i="' + i + '"><div class="top"><span>' + esc(g.name) + '</span><b>' + Calc.fmtUZS(g.sum) + '</b></div>'
-        + '<div class="bar' + (ui.statsKind === "exp" ? " exp" : "") + '"><i style="width:' + Math.max(1, g.share).toFixed(1) + '%"></i></div>'
+      return '<div class="cat" data-i="' + i + '"><div class="top"><span><i class="dot" style="background:' + colors[i] + '"></i>' + esc(g.name) + '</span><b>' + Calc.fmtUZS(g.sum) + '</b></div>'
+        + '<div class="bar"><i style="background:' + colors[i] + ';width:' + Math.max(1, g.share).toFixed(1) + '%"></i></div>'
         + '<div class="meta">' + g.share.toFixed(g.share < 10 ? 1 : 0).replace(".", ",") + '% · ' + g.items.length + ' ' + plural(g.items.length, "операция", "операции", "операций") + (open ? " ▾" : " ▸") + '</div>'
         + (open ? '<div class="ops">' + g.items.map(r => '<div><span>' + esc(r.desc || "—")
             + ' · ' + (r.date ? r.date.slice(8, 10) + "." + r.date.slice(5, 7) : Calc.isStatic(r) ? "статичный" : "без даты")
@@ -1207,12 +1218,164 @@ $("#statsBody").addEventListener("click", e => {
   if(bar){ state.month = bar.dataset.key; ui.openCat = null; refreshViews(); return; }
   const seg = e.target.closest("[data-kind]");
   if(seg){ ui.statsKind = seg.dataset.kind; ui.openCat = null; renderStats(); return; }
-  const c = e.target.closest(".cat");
-  if(c){
+  const c = e.target.closest(".cat, .pie circle");
+  if(c && isMoneyTab()){
     const g = $("#statsBody")._groups[+c.dataset.i], key = ui.statsKind + ":" + g.name;
     ui.openCat = ui.openCat === key ? null : key; renderStats();
   }
 });
+
+/* ---- per-tab statistics: each tab gets stats for its own table ---- */
+function tabKind(t){
+  if(!t) return "generic";
+  if(/expense/i.test(t.name)) return "exp";
+  if(/income/i.test(t.name)) return "inc";
+  if(/invest/i.test(t.name)) return /goal/i.test(t.name) ? "goals" : "invest";
+  return "generic";
+}
+function isMoneyTab(){ return ui.statsTab === "exp" || ui.statsTab === "inc"; }
+function statsTableObj(){ return state.schema && state.schema.find(t => t.id === ui.statsTable); }
+function tableTitle(t){ return t.name.replace(/^[^\p{L}\p{N}]+/u, ""); }
+function openStats(){
+  const t = currentTable();
+  ui.statsTab = tabKind(t); ui.statsTable = t.id; ui.openCat = null;
+  if(isMoneyTab()) ui.statsKind = ui.statsTab;
+  $("#statsTitle").textContent = isMoneyTab() ? "Статистика" : tableTitle(t);
+  openSheet("#statsModal");
+}
+function renderStats(){
+  if(isMoneyTab() || !ui.statsTab) return renderMoneyStats();
+  const t = statsTableObj();
+  if(!t) return;
+  if(ui.statsTab === "invest") return renderInvestStats(t);
+  if(ui.statsTab === "goals") return renderGoalStats(t);
+  return renderGenericStats(t);
+}
+
+/* raw records of any table, cached for a minute */
+const tcache = {};
+function tableData(t, force){
+  const c = tcache[t.id] || (tcache[t.id] = { status: "idle", rows: [], loadedAt: 0, promise: null, error: null });
+  if(c.promise) return c;
+  if(!force && (c.status === "error" || (c.loadedAt && Date.now() - c.loadedAt < 60000))) return c;
+  c.status = "loading";
+  const fields = t.fields.filter(f => f.type !== "multipleAttachments").map(f => f.name);
+  c.promise = listAll(t, fields)
+    .then(rs => { c.rows = rs; c.status = "ready"; c.loadedAt = Date.now(); c.error = null; })
+    .catch(e => { c.status = "error"; c.error = e.message || String(e); })
+    .finally(() => { c.promise = null; refreshViews(); });
+  return c;
+}
+function tableState(c){
+  if(c.status === "error") return '<div class="state">Не удалось загрузить данные из Airtable.<br>' + esc(c.error)
+    + '<br><button class="btn ghost" data-reload>Повторить</button></div>';
+  return '<div class="state">Загрузка…</div>';
+}
+function investFields(t){
+  const f = t.fields, N = re => f.find(x => re.test(x.name.trim()) && NUMERIC.has(x.type));
+  const S = re => f.find(x => x.type === "singleSelect" && re.test(x.name.trim()));
+  return {
+    invested: N(/^invested\.?s$/i) || N(/^so'?m$/i) || N(/^invested/i),   // amount in сум
+    profit: N(/^profit$/i), goal: N(/^goal$/i),
+    cat: S(/^category$/i) || f.find(x => x.type === "singleSelect" && !/^(type|country|hukm)$/i.test(x.name.trim())),
+    type: S(/^type$/i),
+    date: f.find(x => x.type === "date" || x.type === "dateTime"),
+    note: f.find(x => /^(note|description)$/i.test(x.name.trim()))
+  };
+}
+function investRows(t, rows){
+  const m = investFields(t), v = (r, fl) => fl ? r.fields[fl.name] : undefined;
+  return rows.map(r => ({ id: r.id, cat: v(r, m.cat) || null, type: v(r, m.type) || null,
+    invested: Calc.num(v(r, m.invested)), profit: Calc.num(v(r, m.profit)), goal: Calc.num(v(r, m.goal)),
+    date: v(r, m.date) ? String(v(r, m.date)).slice(0, 10) : null, note: String(v(r, m.note) || "") }));
+}
+function fmtDate(d){ return d ? d.slice(8, 10) + "." + d.slice(5, 7) + "." + d.slice(2, 4) : "без даты"; }
+function catRowsHTML(groups, colors, sub){
+  return groups.map((g, i) => '<div class="cat" style="cursor:default"><div class="top"><span><i class="dot" style="background:' + colors[i] + '"></i>'
+    + esc(g.name) + '</span><b>' + Calc.fmtUZS(g.sum) + '</b></div>'
+    + (g.share > 0 ? '<div class="bar"><i style="background:' + colors[i] + ';width:' + Math.max(1, g.share).toFixed(1) + '%"></i></div>' : '')
+    + '<div class="meta">' + (g.share > 0 ? g.share.toFixed(g.share < 10 ? 1 : 0).replace(".", ",") + '%' : 'итог ≤ 0')
+    + (sub ? ' · ' + sub(g) : '') + '</div></div>').join("");
+}
+
+function renderInvestStats(t){
+  const box = $("#statsBody"), c = tableData(t);
+  if(!c.loadedAt){ box.innerHTML = tableState(c); return; }
+  const m = investFields(t);
+  if(!m.invested){ box.innerHTML = '<div class="state">В таблице не найдено поле с суммой вложений.</div>'; return; }
+  const rows = investRows(t, c.rows), s = Calc.investSummary(rows);
+  let h = '<div class="card">'
+    + '<div class="kv"><span>Портфель сейчас</span><b>' + Calc.fmtUZS(s.total) + '</b></div>'
+    + '<div class="kv"><span>Вложено</span><b>' + Calc.fmtUZS(s.deposited) + '</b></div>'
+    + (s.withdrawn ? '<div class="kv"><span>Выведено / подарено</span><b class="neg">−' + Calc.fmtUZS(s.withdrawn) + '</b></div>' : '')
+    + '<div class="kv"><span>Профит</span><b class="pos">' + Calc.fmtSigned(s.profit)
+      + (s.roi !== null ? '<small>' + s.roi.toFixed(2).replace(".", ",") + '% к вложенному</small>' : '') + '</b></div>'
+    + '</div>';
+  // pie: what the portfolio consists of — own money (net of withdrawals) vs earned profit
+  if(s.net > 0 && s.profit > 0){
+    const parts = [{ name: "Вложено чистыми", sum: s.net }, { name: "Профит", sum: s.profit }];
+    parts.forEach(p => { p.share = p.sum / s.total * 100; });
+    const pc = ["#2D7FF9", "#20C933"];
+    h += pieSVG(parts, pc, s.total) + catRowsHTML(parts, pc);
+  }
+  // categories: a category can net to ≤ 0 (e.g. gifted gold), so they are listed, not drawn as slices
+  const groups = s.byCat.map(g => ({ name: g.name, sum: g.total, net: g.net, profit: g.profit }));
+  const posTotal = groups.filter(g => g.sum > 0).reduce((a, g) => a + g.sum, 0);
+  groups.forEach(g => { g.share = g.sum > 0 && posTotal ? g.sum / posTotal * 100 : 0; });
+  h += '<div class="lbl" style="margin-top:14px">По категориям</div>'
+    + catRowsHTML(groups, categoryColors(m.cat, groups), g => 'вложено ' + Calc.fmtShort(g.net) + (g.profit ? ' · профит ' + Calc.fmtShort(g.profit) : ''));
+  const recent = rows.filter(r => r.invested || r.profit).sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))).slice(0, 8);
+  if(recent.length){
+    h += '<div class="lbl" style="margin-top:14px">Последние операции</div><div class="ops">' + recent.map(r => {
+      const amt = r.invested || r.profit;
+      return '<div><span>' + fmtDate(r.date) + ' · ' + esc(r.type || (r.profit ? "Profit" : "—")) + (r.cat ? ' · ' + esc(r.cat) : '') + (r.note ? ' · ' + esc(r.note) : '')
+        + '</span><b class="' + (amt < 0 ? "neg" : r.profit ? "pos" : "") + '">' + (amt > 0 && r.profit ? "+" : "") + fmtN(amt) + '</b></div>';
+    }).join("") + '</div>';
+  }
+  box.innerHTML = h;
+}
+
+function renderGoalStats(t){
+  const box = $("#statsBody"), c = tableData(t);
+  const it = state.schema.find(x => tabKind(x) === "invest");
+  const ci = it ? tableData(it) : null;
+  if(!c.loadedAt || (ci && !ci.loadedAt)){ box.innerHTML = tableState(c.loadedAt ? ci : c); return; }
+  const goals = investRows(t, c.rows).filter(g => g.goal > 0);
+  const ledger = it ? investRows(it, ci.rows) : [];
+  const savedFor = cat => Calc.investSummary(cat ? ledger.filter(r => r.cat === cat) : ledger).total;
+  let h = '';
+  if(!goals.length){
+    h += '<div class="card"><div class="kv"><span>Портфель сейчас</span><b>' + Calc.fmtUZS(savedFor(null)) + '</b></div></div>'
+      + '<div class="note warn">Цель не задана. Заполните в «' + esc(tableTitle(t)) + '» поле <b>Goal</b> (сумма в сумах) и при желании <b>Category</b>. '
+      + 'Тогда здесь появится, сколько осталось до цели. Накопленное считается по таблице «' + esc(it ? tableTitle(it) : "Investing") + '»: вложено + профит.</div>';
+  } else {
+    goals.forEach(g => {
+      const p = Calc.goalProgress(g.goal, savedFor(g.cat));
+      h += '<div class="card"><div class="kv"><span><b style="font-size:15px">' + esc(g.cat || "Весь портфель") + '</b>' + (g.note ? ' · ' + esc(g.note) : '') + '</span>'
+        + '<b>' + (p.status === "done" ? '<span class="pos">Цель достигнута ✓</span>' : Calc.fmtPct(p.pct).replace("+", "")) + '</b></div>'
+        + '<div class="bar"><i style="width:' + p.pct.toFixed(1) + '%"></i></div>'
+        + '<div class="kv"><span>Накоплено</span><b>' + Calc.fmtUZS(p.saved) + '</b></div>'
+        + '<div class="kv"><span>Цель</span><b>' + Calc.fmtUZS(p.target) + '</b></div>'
+        + '<div class="kv"><span>Осталось</span><b' + (p.left ? ' class="neg"' : '') + '>' + Calc.fmtUZS(p.left) + '</b></div></div>';
+    });
+    h += '<div class="note">Накоплено = вложено + профит по таблице «' + esc(it ? tableTitle(it) : "Investing") + '» в той же категории (без категории — весь портфель).</div>';
+  }
+  box.innerHTML = h;
+}
+
+function renderGenericStats(t){
+  const box = $("#statsBody"), c = tableData(t);
+  const amt = t.fields.find(f => NUMERIC.has(f.type));
+  const cat = t.fields.find(f => f.type === "singleSelect");
+  if(!amt || !cat){ box.innerHTML = '<div class="state">В этой таблице нет суммы и категории, по которым можно построить статистику.</div>'; return; }
+  if(!c.loadedAt){ box.innerHTML = tableState(c); return; }
+  const gs = Calc.groupSum(c.rows.map(r => ({ cat: r.fields[cat.name] || null, amount: r.fields[amt.name] })));
+  if(!gs.groups.length){ box.innerHTML = '<div class="state">Данных пока нет.</div>'; return; }
+  const colors = categoryColors(cat, gs.groups);
+  box.innerHTML = '<div class="note">«' + esc(amt.name) + '» по полю «' + esc(cat.name) + '», за всё время</div>'
+    + (gs.groups.every(g => g.sum > 0) ? pieSVG(gs.groups, colors, gs.total) : '')
+    + catRowsHTML(gs.groups, colors, g => g.items.length + ' ' + plural(g.items.length, "запись", "записи", "записей"));
+}
 
 /* ---- sheet plumbing ---- */
 function openSheet(sel){
@@ -1222,12 +1385,12 @@ function openSheet(sel){
 }
 document.querySelectorAll(".sheetmodal").forEach(m => m.addEventListener("click", e => {
   if(e.target === m || e.target.closest("[data-close]")){ m.classList.remove("show"); ui.openStatic = null; return; }
-  if(e.target.closest("[data-reload]")){ loadData(true); return; }
+  if(e.target.closest("[data-reload]")){ loadData(true); const st = statsTableObj(); if(st && !isMoneyTab()) tableData(st, true); return; }
   const mb = e.target.closest("[data-month]");
   if(mb && !mb.disabled){ state.month = Calc.shiftMonth(state.month, +mb.dataset.month); ui.openStatic = null; ui.openCat = null; refreshViews(); }
 }));
 $("#staticBtn").onclick = () => openSheet("#staticModal");
-$("#statsBtn").onclick = () => openSheet("#statsModal");
+$("#statsBtn").onclick = openStats;
 $("#devBtn").onclick = () => openSheet("#staticModal");
 document.addEventListener("visibilitychange", () => {
   if(!document.hidden && state.cfg && Date.now() - data.loadedAt > 5 * 60000) loadData();

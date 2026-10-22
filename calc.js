@@ -97,6 +97,50 @@ function byCategory(recs, key, kind){
   return { total, groups };
 }
 
+/* Sum amounts per category: items [{cat, amount}] → {total, groups:[{name,sum,share,items}]} sorted by sum */
+function groupSum(items){
+  const map = new Map();
+  items.forEach(r => {
+    const c = r.cat || NO_CAT;
+    if(!map.has(c)) map.set(c, { name: c, sum: 0, items: [] });
+    const g = map.get(c); g.sum += num(r.amount); g.items.push(r);
+  });
+  const groups = [...map.values()].filter(g => g.sum !== 0);
+  const total = groups.reduce((s, g) => s + g.sum, 0);
+  groups.forEach(g => { g.share = total ? g.sum / total * 100 : 0; });
+  groups.sort((a, b) => b.sum - a.sum);
+  return { total, groups };
+}
+
+/* Investing ledger rows: { cat, type, invested (сум; negative = gifted/withdrawn), profit, date }.
+   Mirrors the Airtable formula Total = Invested.S + Profit. */
+function investSummary(rows){
+  let deposited = 0, withdrawn = 0, profit = 0;
+  const cats = new Map();
+  rows.forEach(r => {
+    const inv = num(r.invested), pr = num(r.profit);
+    if(inv > 0) deposited += inv; else withdrawn += -inv;
+    profit += pr;
+    const c = r.cat || NO_CAT;
+    if(!cats.has(c)) cats.set(c, { name: c, net: 0, profit: 0, total: 0 });
+    const g = cats.get(c); g.net += inv; g.profit += pr; g.total += inv + pr;
+  });
+  const net = deposited - withdrawn;
+  return {
+    deposited, withdrawn, net, profit, total: net + profit,
+    roi: deposited > 0 ? profit / deposited * 100 : null,
+    byCat: [...cats.values()].sort((a, b) => b.total - a.total)
+  };
+}
+
+/* Progress to an investing goal: target vs what is already saved */
+function goalProgress(target, saved){
+  target = num(target); saved = num(saved);
+  if(!(target > 0)) return { status: "nogoal", target, saved, left: null, pct: null };
+  const left = Math.max(0, target - saved);
+  return { status: left === 0 ? "done" : "progress", target, saved, left, pct: Math.max(0, Math.min(100, saved / target * 100)) };
+}
+
 /* ---- formatting (UZS) ---- */
 function group3(n){ return String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
 function fmtUZS(n){ return (n < 0 ? "−" : "") + group3(n) + " сум"; }
@@ -114,7 +158,7 @@ function fmtPct(p){
 }
 
 const Calc = { MONTHS_EN, MONTHS_RU, NO_CAT, num, ym, shiftMonth, monthLabel, monthKeyOf, isStatic,
-  staticSummary, totals, change, history, byCategory, fmtUZS, fmtSigned, fmtShort, fmtPct };
+  staticSummary, totals, change, history, byCategory, groupSum, investSummary, goalProgress, fmtUZS, fmtSigned, fmtShort, fmtPct };
 root.Calc = Calc;
 if(typeof module !== "undefined" && module.exports) module.exports = Calc;
 })(typeof window !== "undefined" ? window : globalThis);
