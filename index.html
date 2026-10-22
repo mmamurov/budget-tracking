@@ -30,6 +30,9 @@
 }
 *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
+/* iOS standalone (black-translucent): on pages too short to scroll, fixed bottom bars sit higher by the
+   status-bar height. Making every page at least screen-tall keeps the "Добавить" button at the same spot on all tabs. */
+html{min-height:calc(100% + env(safe-area-inset-top))}
 body{
   background:var(--bg); color:var(--text);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -188,6 +191,9 @@ header{gap:8px}
 .srow .am{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
 .srow .am span{color:var(--text2);font-weight:500}
 .srow .sub{font-size:13px;color:var(--text2);margin-top:2px}
+.srow .sub span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow .sub span:last-child{white-space:nowrap}
+#themeSeg button{font-size:13px;padding:9px 4px}
 .edit{margin-top:10px;cursor:default}
 .edit .two{display:flex;gap:8px}
 .edit .two>*{flex:1;min-width:0}
@@ -259,11 +265,12 @@ header{gap:8px}
     <input class="txt" id="cfgBase" placeholder="appXXXXXXXXXXXXXX" autocomplete="off">
     <div class="lbl">Тема</div>
     <div class="seg" id="themeSeg">
-      <button data-v="auto">Авто (система)</button>
+      <button data-v="sun">По солнцу</button>
+      <button data-v="auto">Как в системе</button>
       <button data-v="light">Светлая</button>
       <button data-v="dark">Тёмная</button>
     </div>
-    <div class="hint">«Авто» следует настройке телефона — на iPhone/Android система сама переключает тему по заходу и восходу солнца.</div>
+    <div class="hint">«По солнцу»: светлая от восхода до заката, тёмная вечером и ночью (по Ташкенту). Кнопка ☾/☀︎ в шапке меняет тему до ближайшего восхода или заката.</div>
     <div class="hint" id="diag" style="display:none"></div>
     <button class="btn" id="cfgSave">Подключить</button>
     <button class="btn ghost" id="cfgRefresh" style="display:none">Обновить структуру базы</button>
@@ -312,16 +319,31 @@ const state = {
   cfg: LS.get("cfg", null),            // {token, baseId}
   schema: LS.get("schema", null),      // [{id,name,fields:[...]}]
   tableId: LS.get("tableId", null),
-  theme: LS.get("theme", "auto"),
+  theme: LS.get("theme", "sun"),
   queue: LS.get("queue", []),          // pending records [{tableId, fields}]
   last: LS.get("last", {}),            // remembered selections per table
   mode: "expense"                      // expense | income (Expenses table)
 };
 
 /* ============ theme ============ */
+/* "sun": light from sunrise to sunset, dark otherwise (Tashkent). The header button
+   overrides it only until the next sunrise/sunset. */
+const SUN_PLACE = [41.3111, 69.2797];
 const mq = window.matchMedia("(prefers-color-scheme: dark)");
+if(!LS.get("themeV2", false)){ LS.set("themeV2", true); state.theme = "sun"; LS.set("theme", "sun"); }   // one-time switch to the new default
+let sunTimer = null;
+function effectiveTheme(){
+  clearTimeout(sunTimer);
+  if(state.theme === "auto") return mq.matches ? "dark" : "light";
+  if(state.theme !== "sun") return state.theme;
+  const s = Calc.sunTheme(new Date(), SUN_PLACE[0], SUN_PLACE[1]);
+  sunTimer = setTimeout(applyTheme, Math.max(1000, Math.min(s.next - Date.now() + 2000, 6 * 3600000)));
+  const ov = LS.get("themeOverride", null);
+  if(ov && ov.until > Date.now()) return ov.theme;
+  return s.theme;
+}
 function applyTheme(){
-  const eff = state.theme === "auto" ? (mq.matches ? "dark" : "light") : state.theme;
+  const eff = effectiveTheme();
   document.documentElement.dataset.theme = eff;
   const bg = eff === "dark" ? "#0f1115" : "#f6f7f9";
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.content = bg);
@@ -331,7 +353,7 @@ function applyTheme(){
   document.querySelectorAll("#themeSeg button").forEach(b =>
     b.classList.toggle("active", b.dataset.v === state.theme));
 }
-function setTheme(t){ state.theme = t; LS.set("theme", t); applyTheme(); }
+function setTheme(t){ state.theme = t; LS.set("theme", t); LS.del("themeOverride"); applyTheme(); }
 mq.addEventListener("change", applyTheme);
 document.addEventListener("visibilitychange", () => { if(!document.hidden) applyTheme(); });
 applyTheme();
@@ -836,7 +858,14 @@ $("#settingsBtn").onclick = () => openSettings(false);
 $("#cfgClose").onclick = () => $("#setupModal").classList.remove("show");
 document.querySelectorAll("#themeSeg button").forEach(b => b.onclick = () => setTheme(b.dataset.v));
 $("#themeBtn").onclick = () => {
-  setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"); vibrate();
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  if(state.theme === "sun"){
+    const s = Calc.sunTheme(new Date(), SUN_PLACE[0], SUN_PLACE[1]);
+    if(next === s.theme) LS.del("themeOverride");   // back to what the sun says
+    else LS.set("themeOverride", { theme: next, until: s.next.valueOf() });
+    applyTheme();
+  } else setTheme(next);
+  vibrate();
 };
 $("#cfgSave").onclick = async () => {
   const token = $("#cfgToken").value.trim(), baseId = $("#cfgBase").value.trim();
@@ -1053,9 +1082,9 @@ function staticRow(r){
   const open = ui.openStatic === r.id, planned = r.plan > 0;
   const diff = r.price - r.plan;
   let h = '<div class="srow" data-id="' + r.id + '">'
-    + '<div class="top"><span class="nm">' + esc(r.desc || r.cat || "—") + '</span><span class="am">' + fmtN(r.price)
+    + '<div class="top"><span class="nm">' + esc(r.cat || "Без категории") + '</span><span class="am">' + fmtN(r.price)
     + (planned ? ' <span>/ ' + fmtN(r.plan) + '</span>' : '') + '</span></div>'
-    + '<div class="sub"><span>' + esc(r.cat || "Без категории") + '</span>'
+    + '<div class="sub"><span>' + esc(r.desc || "—") + '</span>'
     + (planned ? '<span class="' + (diff > 0 ? "neg" : diff < 0 ? "pos" : "") + '">' + (diff ? Calc.fmtSigned(diff) : "по плану") + '</span>' : '<span>без плана</span>')
     + '</div>';
   if(planned) h += '<div class="bar"><i class="' + (diff > 0 ? "over" : "") + '" style="width:' + Math.min(100, r.price / r.plan * 100).toFixed(1) + '%"></i></div>';

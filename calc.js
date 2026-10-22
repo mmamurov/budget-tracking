@@ -141,6 +141,37 @@ function goalProgress(target, saved){
   return { status: left === 0 ? "done" : "progress", target, saved, left, pct: Math.max(0, Math.min(100, saved / target * 100)) };
 }
 
+/* Sunrise / sunset for a date and place (standard sunrise equation, ±2 min).
+   Returns Date objects; {polar:"day"|"night"} when the sun never sets / rises. */
+function sunTimes(date, lat, lng){
+  const rad = Math.PI / 180, J1970 = 2440588, J2000 = 2451545;
+  const toDays = d => d.valueOf() / 86400000 - 0.5 + J1970 - J2000;
+  const fromJ = j => new Date((j + 0.5 - J1970) * 86400000);
+  const lw = rad * -lng, phi = rad * lat;
+  const n = Math.round(toDays(date) - 0.0009 - lw / (2 * Math.PI));
+  const ds = 0.0009 + lw / (2 * Math.PI) + n;
+  const M = rad * (357.5291 + 0.98560028 * ds);
+  const C = rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M));
+  const L = M + C + rad * 102.9372 + Math.PI;
+  const dec = Math.asin(Math.sin(rad * 23.4397) * Math.sin(L));
+  const Jnoon = J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+  const cosw = (Math.sin(rad * -0.833) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec));
+  if(cosw < -1) return { polar: "day" };
+  if(cosw > 1) return { polar: "night" };
+  const w = Math.acos(cosw);
+  const Jset = J2000 + 0.0009 + (w + lw) / (2 * Math.PI) + n + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+  return { sunrise: fromJ(Jnoon - (Jset - Jnoon)), sunset: fromJ(Jset) };
+}
+/* Light between sunrise and sunset, dark otherwise; also when the theme should next flip */
+function sunTheme(now, lat, lng){
+  const t = sunTimes(now, lat, lng);
+  if(t.polar) return { theme: t.polar === "day" ? "light" : "dark", next: new Date(now.valueOf() + 3600000) };
+  if(now < t.sunrise) return { theme: "dark", next: t.sunrise };
+  if(now < t.sunset) return { theme: "light", next: t.sunset };
+  const tm = sunTimes(new Date(now.valueOf() + 86400000), lat, lng);
+  return { theme: "dark", next: tm.sunrise || new Date(now.valueOf() + 3600000) };
+}
+
 /* ---- formatting (UZS) ---- */
 function group3(n){ return String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
 function fmtUZS(n){ return (n < 0 ? "−" : "") + group3(n) + " сум"; }
@@ -158,7 +189,7 @@ function fmtPct(p){
 }
 
 const Calc = { MONTHS_EN, MONTHS_RU, NO_CAT, num, ym, shiftMonth, monthLabel, monthKeyOf, isStatic,
-  staticSummary, totals, change, history, byCategory, groupSum, investSummary, goalProgress, fmtUZS, fmtSigned, fmtShort, fmtPct };
+  staticSummary, totals, change, history, byCategory, groupSum, investSummary, goalProgress, sunTimes, sunTheme, fmtUZS, fmtSigned, fmtShort, fmtPct };
 root.Calc = Calc;
 if(typeof module !== "undefined" && module.exports) module.exports = Calc;
 })(typeof window !== "undefined" ? window : globalThis);

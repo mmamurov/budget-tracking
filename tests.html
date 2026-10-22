@@ -138,6 +138,25 @@ eq("goal reached", Calc.goalProgress(100, 120), { status:"done", target:100, sav
 const gs = Calc.groupSum([{ cat:"A", amount:300 }, { cat:"B", amount:100 }, { cat:"A", amount:100 }, { cat:null, amount:0 }]);
 eq("groupSum totals", gs.groups.map(g => [g.name, g.sum, g.share]), [["A",400,80],["B",100,20]]);
 
+/* --- sun theme (Tashkent 41.31, 69.28; UTC+5). Expected times worked out by hand from
+   declination + equation of time (sunrise equation, refraction −0.833°) --- */
+const TAS = [41.3111, 69.2797];
+const st = Calc.sunTimes(new Date("2026-10-22T07:00:00Z"), ...TAS);
+const hm = d => new Date(d.valueOf() + 5 * 3600000).toISOString().slice(11, 16);   // local time in Tashkent
+const minutesOff = (d, want) => { const [h, m] = want.split(":").map(Number); const [h2, m2] = hm(d).split(":").map(Number); return Math.abs(h * 60 + m - h2 * 60 - m2); };
+eq("Tashkent sunrise 22 Oct ≈ 06:43 (±5 min)", minutesOff(st.sunrise, "06:43") <= 5, true);
+eq("Tashkent sunset 22 Oct ≈ 17:31 (±5 min)", minutesOff(st.sunset, "17:31") <= 5, true);
+const sj = Calc.sunTimes(new Date("2026-06-21T07:00:00Z"), ...TAS);
+eq("Tashkent sunrise 21 Jun ≈ 04:50 (±5 min)", minutesOff(sj.sunrise, "04:50") <= 5, true);
+eq("Tashkent sunset 21 Jun ≈ 19:59 (±5 min)", minutesOff(sj.sunset, "19:59") <= 5, true);
+eq("noon is light", Calc.sunTheme(new Date("2026-10-22T07:00:00Z"), ...TAS).theme, "light");
+eq("23:00 is dark", Calc.sunTheme(new Date("2026-10-22T18:00:00Z"), ...TAS).theme, "dark");
+eq("05:00 is dark", Calc.sunTheme(new Date("2026-10-22T00:00:00Z"), ...TAS).theme, "dark");
+const night = Calc.sunTheme(new Date("2026-10-22T18:00:00Z"), ...TAS);
+eq("after sunset next flip = tomorrow's sunrise", hm(night.next) < "07:10" && night.next > new Date("2026-10-23T00:00:00Z"), true);
+eq("before sunrise next flip = today's sunrise", Calc.sunTheme(new Date("2026-10-22T00:00:00Z"), ...TAS).next.valueOf(), st.sunrise.valueOf());
+eq("polar night handled", Calc.sunTheme(new Date("2026-12-21T12:00:00Z"), 78.2, 15.6).theme, "dark");
+
 /* --- month helpers --- */
 eq("shift back over year", Calc.shiftMonth("2026-01", -1), "2025-12");
 eq("shift forward over year", Calc.shiftMonth("2026-12", 1), "2027-01");
