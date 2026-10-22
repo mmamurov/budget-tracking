@@ -314,6 +314,7 @@ header{gap:8px}
 
 <script src="calc.js"></script>
 <script src="quotes.js"></script>
+<script src="autolinks.js"></script>
 <script>
 "use strict";
 /* ============ storage & state ============ */
@@ -968,8 +969,10 @@ function normalize(r, m, kind, names, table){
   };
   const legacyInc = m.inc ? val(m.inc) : null;
   const date = val(m.date) || null;
+  const linked = fl => { const v = val(fl); return Array.isArray(v) && v.length > 0; };
   return {
     id: r.id, tableId: table.id, kind: legacyInc ? "inc" : kind,
+    createdTime: r.createdTime, hasMonth: linked(m.month), hasYear: linked(m.year),
     price: Calc.num(val(m.price)), plan: Calc.num(val(m.plan)),
     type: val(m.type) || null, cat: legacyInc || val(m.cat) || null,
     desc: String(val(m.desc) || "").trim(), date: date ? String(date).slice(0, 10) : null,
@@ -1000,9 +1003,57 @@ function loadData(force){
       data.status = "error"; data.error = e.message || String(e);
     }
     data.promise = null; refreshViews();
+    if(data.status === "ready") autoFillLinks();
   })();
   data.promise = run;
   return run;
+}
+
+/* ============ Month / Year for automation-created static rows (see autolinks.js) ============ */
+const AUTOMATION_TZ = "Asia/Tashkent";   // the "Static expenses" automation runs at 06:00 +05
+const autoLinks = { busy: false, at: 0 };
+async function autoFillLinks(){
+  const t = expTable();
+  if(!t || autoLinks.busy || Date.now() - autoLinks.at < 10 * 60000) return;   // at most once per 10 min
+  const m = fieldMap(t, "exp");
+  const mt = m.month && linkedTableOf(m.month), yt = m.year && linkedTableOf(m.year);
+  if(!mt || !yt || !mt.fields.length || !yt.fields.length) return;              // no link fields (e.g. fallback schema)
+  const mName = mt.fields[0].name, yName = yt.fields[0].name;                  // "Month", "Year"
+  const base = "/" + state.cfg.baseId + "/";
+  autoLinks.busy = true; autoLinks.at = Date.now();
+  try{
+    const res = await AutoLinks.run({
+      rows: data.recs.filter(r => r.tableId === t.id), now: new Date(), tz: AUTOMATION_TZ,
+      listMonths: async () => (await listAll(mt, [mName])).map(r => ({ id: r.id, name: r.fields[mName] })),
+      findYear: async y => {
+        const f = 'TRIM({' + yName + '}&"")="' + y + '"';
+        const j = await api(base + encodeURIComponent(yt.id) + "?maxRecords=1&filterByFormula=" + encodeURIComponent(f));
+        return j.records[0] || null;
+      },
+      createYear: async y => {
+        try{
+          const j = await api(base + encodeURIComponent(yt.id),
+            { method: "POST", body: JSON.stringify({ records: [{ fields: { [yName]: y } }], typecast: true }) });
+          return j.records[0];
+        }catch(e){ throw new Error("не удалось создать год " + y + " в «" + tableTitle(yt) + "»: " + e.message); }
+      },
+      patch: ups => api(base + encodeURIComponent(t.id), { method: "PATCH", body: JSON.stringify({
+        records: ups.map(u => ({ id: u.id, fields: Object.assign({},
+          u.month ? { [m.month.name]: [u.month] } : {}, u.year ? { [m.year.name]: [u.year] } : {}) })) }) })
+    });
+    if(res.status === "done"){
+      for(const k in linkCache) delete linkCache[k];   // the main form may have cached a missing year
+      toast("Месяц и год проставлены: " + res.patched + " " + plural(res.patched, "статичная запись", "статичные записи", "статичных записей")
+        + (res.createdYear ? ", добавлен год " + res.key.slice(0, 4) : ""));
+      autoLinks.busy = false;
+      loadData(true);
+      return;
+    }
+  }catch(e){
+    console.warn("Month/Year auto-fill failed:", e.message);   // api() errors never contain the token
+    toast("Месяц/год не проставлены: " + e.message, true);
+  }
+  autoLinks.busy = false;
 }
 
 /* ============ views ============ */
