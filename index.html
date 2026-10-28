@@ -665,6 +665,13 @@ function buildFastForm(table, opts={}){
 function renderForm(){
   const table = currentTable();
   const form = $("#form"); form.innerHTML = ""; forms = {};
+  if(tabKind(table) === "networth"){                      // a snapshot editor instead of "add a record"
+    $("#saveBtn").textContent = "Сохранить снимок";
+    $("#staticBtn").style.display = "none";
+    $("#savebar").style.display = "";
+    renderQuote(table); renderNetworthForm();
+    return;
+  }
   const isExpenses = /expense/i.test(table.name);
   forms.expense = buildFastForm(table, isExpenses ? { skip: ["Incomes", "Static"] } : {});
   form.appendChild(forms.expense.root);
@@ -682,7 +689,7 @@ function renderQuote(table){
 
 /* ============ save (with static aggregation) ============ */
 /* Static expenses are accumulated in ONE row per category+month (free-plan row limit):
-   find existing row → add Price, bump "Nx" counter in Description. */
+   find existing row → add Price, add the description as an item ("Non" → "…, Non"; again → "…, Non 2x"). */
 async function findStaticRecord(table, fields, auto){
   const q = v => String(v).replace(/"/g, "");
   const terms = ['{Type}="' + q(fields["Type"]) + '"', '{Expenses}="' + q(fields["Expenses"]) + '"'];
@@ -692,18 +699,9 @@ async function findStaticRecord(table, fields, auto){
   const yVal = auto ? auto.year : (yF ? fields[yF.name] : null);
   if(mF && mVal != null && !Array.isArray(mVal)) terms.push('{' + mF.name + '}&""="' + q(mVal) + '"');
   if(yF && yVal != null && !Array.isArray(yVal)) terms.push('{' + yF.name + '}&""="' + q(yVal) + '"');
-  const qs = "?maxRecords=1&filterByFormula=" + encodeURIComponent("AND(" + terms.join(",") + ")");
+  const qs = "?maxRecords=10&filterByFormula=" + encodeURIComponent("AND(" + terms.join(",") + ")");
   const j = await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id) + qs);
-  return j.records[0] || null;
-}
-/* "Fuel" + one more payment → "Fuel 2x"; "Fuel 2x" → "Fuel 3x"; a new note is appended once */
-function staticDescAfterAdd(oldDesc, note){
-  let base = String(oldDesc || "").trim(), count = 1;
-  const m = base.match(/^(.*\S)?\s*(\d+)x$/);
-  if(m){ base = (m[1] || "").trim(); count = parseInt(m[2], 10) || 1; }
-  const nd = String(note || "").trim();
-  if(nd && !base.toLowerCase().includes(nd.toLowerCase())) base = base ? base + ", " + nd : nd;
-  return { desc: (base ? base + " " : "") + (count + 1) + "x", count: count + 1 };
+  return Calc.pickStaticRecord(j.records, fields["Tag"]);   // e.g. Home: "Uyga bozorlik", or "Nafaqa" with Tag Maftuna
 }
 async function persist(table, fields, isStatic, auto){
   await applyAutoLinks(table, fields, auto);
@@ -712,11 +710,14 @@ async function persist(table, fields, isStatic, auto){
     if(r){
       const old = Number(r.fields["Price"]) || 0;
       const add = Number(fields["Price"]) || 0;
-      const d = staticDescAfterAdd(r.fields["Description"], fields["Description"]);
-      const patch = { Price: old + add, Description: d.desc };
+      const patch = { Price: old + add };
+      const desc = Calc.mergeStaticDesc(r.fields["Description"], fields["Description"]);
+      if(desc !== String(r.fields["Description"] || "").trim()) patch.Description = desc;
       await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id) + "/" + r.id,
         { method: "PATCH", body: JSON.stringify({ fields: patch, typecast: true }) });
-      return { updated: true, total: old + add, count: d.count };
+      const note = Calc.splitItems(fields["Description"]).pop();
+      const item = note && Calc.splitItems(desc).find(i => i.name.toLowerCase() === note.name.toLowerCase());
+      return { updated: true, total: old + add, row: r.fields["Description"] || "", item };
     }
   }
   await api("/" + state.cfg.baseId + "/" + encodeURIComponent(table.id),
@@ -724,6 +725,7 @@ async function persist(table, fields, isStatic, auto){
   return { updated: false };
 }
 async function save(){
+  if(tabKind(currentTable()) === "networth") return saveNetworth();
   const f = forms[state.mode] || forms.expense;
   const table = f.table;
   const fields = {};
@@ -759,7 +761,8 @@ async function save(){
   try{
     const res = await persist(table, fields, isStatic, auto);
     if(res.updated){
-      toast("Static " + fields["Expenses"] + " → " + Number(res.total).toLocaleString("ru-RU") + " (" + res.count + "x)");
+      toast("Static " + fields["Expenses"] + " → " + fmtN(res.total)
+        + (res.item ? " · " + res.item.name + (res.item.count > 1 ? " " + res.item.count + "x" : "") : ""));
     } else {
       toast("Сохранено ✓");
     }
@@ -1062,6 +1065,148 @@ function refreshViews(){
   if($("#staticModal").classList.contains("show")) renderStatic();
   if($("#statsModal").classList.contains("show")) renderStats();
 }
+
+/* ============ 💎 Networth: this month's snapshot ============
+   Investing / Debt+ / Debt- are filled from the Investing and Debt tracker tables;
+   Cash, Cards, Savings, Gold, Property and USD rate are typed here and carried to the next month. */
+const NW_LABELS = { Cash: "Наличные", Cards: "Карты", Savings: "Сбережения", Gold: "Золото", Property: "Имущество",
+  Investing: "Инвестиции", "Debt+": "Мне должны", "Debt-": "Я должен", "USD rate": "Курс $" };
+const NW = { busy: null, at: 0, st: null };
+function nwTables(){
+  const s = state.schema || [];
+  return { t: s.find(x => tabKind(x) === "networth"), inv: s.find(x => tabKind(x) === "invest"), debt: s.find(x => /debt/i.test(x.name)) };
+}
+function nwHas(t, name){ return t.fields.some(f => f.name === name); }
+async function nwDebts(debt){
+  if(!debt) return [];
+  const F = re => debt.fields.find(f => re.test(f.name.trim()));
+  const fs = { som: F(/^so'?m$/i), usd: F(/^(dollar|usd)$/i), type: F(/^type$/i), status: F(/^status$/i) };
+  const rows = await listAll(debt, Object.values(fs).filter(Boolean).map(f => f.name));
+  const v = (r, f) => f ? r.fields[f.name] : undefined;
+  return rows.map(r => ({ som: v(r, fs.som), usd: v(r, fs.usd), type: v(r, fs.type), status: v(r, fs.status) }));
+}
+async function nwSnaps(t){
+  const dateF = t.fields.find(f => f.type === "date" || f.type === "dateTime");
+  const rows = await listAll(t, t.fields.filter(f => f.type !== "multipleAttachments").map(f => f.name));
+  return rows.map(r => ({ id: r.id, date: dateF && r.fields[dateF.name] ? String(r.fields[dateF.name]).slice(0, 10) : null, fields: r.fields }))
+    .filter(s => s.date).sort((a, b) => a.date.localeCompare(b.date));
+}
+function syncNetworth(force){
+  if(NW.busy) return NW.busy;
+  if(!force && NW.st && !NW.st.error && Date.now() - NW.at < 60000) return Promise.resolve(NW.st);
+  const { t, inv, debt } = nwTables();
+  if(!t || !state.cfg) return Promise.resolve(null);
+  NW.busy = (async () => {
+    try{
+      const dateF = t.fields.find(f => f.type === "date" || f.type === "dateTime");
+      if(!dateF) throw new Error("в «" + tableTitle(t) + "» нет поля с датой");
+      const key = AutoLinks.monthInZone(new Date(), AUTOMATION_TZ).key;
+      const [snaps, ledger, debts] = await Promise.all([
+        nwSnaps(t),
+        inv ? listAll(inv, inv.fields.filter(f => f.type !== "multipleAttachments").map(f => f.name)).then(rs => investRows(inv, rs)) : [],
+        nwDebts(debt)
+      ]);
+      const cur = snaps.filter(s => s.date.slice(0, 7) === key).pop(), prev = snaps.filter(s => s.date.slice(0, 7) < key).pop();
+      const rate = Calc.num(((cur || prev) || { fields: {} }).fields["USD rate"]);
+      const d = Calc.debtTotals(debts, rate);
+      const auto = {};
+      if(inv && nwHas(t, "Investing")) auto.Investing = Calc.nwInvesting(ledger);
+      if(debt && nwHas(t, "Debt+")) auto["Debt+"] = d.plus;
+      if(debt && nwHas(t, "Debt-")) auto["Debt-"] = d.minus;
+      const plan = Calc.nwSnapshotPlan(snaps, key, auto, Calc.NW_CARRY.filter(k => nwHas(t, k)));
+      const base = "/" + state.cfg.baseId + "/" + encodeURIComponent(t.id);
+      if(plan.action === "create"){
+        const today = new Intl.DateTimeFormat("en-CA", { timeZone: AUTOMATION_TZ }).format(new Date());   // YYYY-MM-DD
+        await api(base, { method: "POST", body: JSON.stringify({ records: [{ fields: Object.assign({ [dateF.name]: today }, plan.fields) }], typecast: true }) });
+      } else if(plan.action === "update"){
+        await api(base + "/" + plan.id, { method: "PATCH", body: JSON.stringify({ fields: plan.fields, typecast: true }) });
+      }
+      const fresh = plan.action === "none" ? snaps : await nwSnaps(t);   // re-read: Total is computed by Airtable
+      NW.st = { table: t, key, snaps: fresh, cur: fresh.filter(s => s.date.slice(0, 7) === key).pop(),
+        prev: fresh.filter(s => s.date.slice(0, 7) < key).pop(), usdOpen: d.usdOpen, created: plan.action === "create", error: null };
+    }catch(e){
+      console.warn("Networth sync failed:", e.message);
+      NW.st = { error: e.message || String(e) };
+    }
+    NW.at = Date.now(); NW.busy = null;
+    if(tabKind(currentTable()) === "networth") renderNetworthForm();
+    if($("#statsModal").classList.contains("show") && ui.statsTab === "networth") renderStats();
+    return NW.st;
+  })();
+  return NW.busy;
+}
+function nwChange(cur, prev){
+  if(!prev) return "";
+  const a = Calc.nwTotal(cur.fields), b = Calc.nwTotal(prev.fields), c = Calc.change(a, b);
+  if(!c.abs) return '<small>как в прошлом снимке</small>';
+  return '<small class="' + (c.abs > 0 ? "pos" : "neg") + '">' + (c.abs > 0 ? "▲ " : "▼ ") + Calc.fmtShort(Math.abs(c.abs))
+    + (c.pct !== null ? " · " + Calc.fmtPct(c.pct).replace(/^[+−]/, "") : "") + ' с ' + fmtDate(prev.date) + '</small>';
+}
+function renderNetworthForm(){
+  const form = $("#form"), s = NW.st;
+  if(!s || NW.busy && !s.cur){ form.innerHTML = '<div class="state">Загрузка…</div>'; if(!NW.busy) syncNetworth(); return; }
+  if(s.error){ form.innerHTML = '<div class="state">Не удалось обновить снимок: ' + esc(s.error) + '<br><button class="btn ghost" id="nwRetry">Повторить</button></div>';
+    $("#nwRetry").onclick = () => { NW.st = null; renderNetworthForm(); }; return; }
+  if(!s.cur){ form.innerHTML = '<div class="state">Снимок за этот месяц не найден.</div>'; return; }
+  const t = s.table, f = s.cur.fields;
+  let h = '<div class="amount"><label>Чистые активы · ' + esc(Calc.monthLabel(s.key)) + '</label>'
+    + '<div style="font-size:30px;font-weight:800;font-variant-numeric:tabular-nums">' + Calc.fmtUZS(Calc.nwTotal(f)) + '</div>'
+    + '<div class="kv" style="padding:0">' + nwChange(s.cur, s.prev) + '</div></div>';
+  h += '<div class="section"><div class="lbl">Вносите сами (переносится на следующий месяц)</div>';
+  Calc.NW_CARRY.filter(k => nwHas(t, k)).forEach(k => {
+    h += '<div class="kv"><span>' + esc(NW_LABELS[k] || k) + '</span><input class="txt" style="max-width:190px;text-align:right" data-nw="' + esc(k)
+      + '" inputmode="decimal" placeholder="0" value="' + (f[k] ? groupAmount(f[k]) : "") + '"></div>';
+  });
+  h += '</div><div class="section"><div class="lbl">Считается автоматически</div><div class="card">';
+  ["Investing", "Debt+", "Debt-"].filter(k => nwHas(t, k)).forEach(k => {
+    h += '<div class="kv"><span>' + esc(NW_LABELS[k]) + '</span><b' + (k === "Debt-" && f[k] ? ' class="neg"' : '') + '>'
+      + (k === "Debt-" && f[k] ? "−" : "") + Calc.fmtUZS(Calc.num(f[k])) + '</b></div>';
+  });
+  h += '</div></div>';
+  if(s.usdOpen) h += '<div class="note warn">Долги в долларах ($' + s.usdOpen + ') не учтены: укажите «Курс $».</div>';
+  h += '<div class="note">Инвестиции — из «Investing» без золота (золото оценивайте в строке «Золото»). Долги — из «Debt tracker», только не возвращённые.</div>';
+  form.innerHTML = h;
+  form.querySelectorAll("[data-nw]").forEach(attachAmountFormat);
+}
+async function saveNetworth(){
+  const s = NW.st;
+  if(!s || !s.cur){ toast("Снимок ещё загружается", true); return; }
+  const patch = {};
+  let bad = false;
+  document.querySelectorAll("#form [data-nw]").forEach(i => {
+    const v = parseAmount(i.value);
+    if(Number.isNaN(v) || (v !== null && v < 0)){ bad = true; return; }
+    if((v || 0) !== Calc.num(s.cur.fields[i.dataset.nw])) patch[i.dataset.nw] = v || 0;
+  });
+  if(bad){ toast("Проверьте суммы", true); return; }
+  if(!Object.keys(patch).length){ toast("Изменений нет"); return; }
+  const btn = $("#saveBtn"); btn.disabled = true;
+  try{
+    await api("/" + state.cfg.baseId + "/" + encodeURIComponent(s.table.id) + "/" + s.cur.id,
+      { method: "PATCH", body: JSON.stringify({ fields: patch, typecast: true }) });
+    toast("Снимок сохранён ✓"); vibrate();
+    await syncNetworth(true);   // a new USD rate changes Debt+/Debt-
+  }catch(e){ toast("Не сохранено: " + e.message, true); }
+  finally{ btn.disabled = false; }
+}
+function renderNetworthStats(){
+  const box = $("#statsBody"), s = NW.st;
+  if(!s || !s.cur){ box.innerHTML = s && s.error ? '<div class="state">' + esc(s.error) + '</div>' : '<div class="state">Загрузка…</div>'; if(!NW.busy && !(s && s.error)) syncNetworth(); return; }
+  const f = s.cur.fields, total = Calc.nwTotal(f);
+  let h = '<div class="card"><div class="kv"><span>Чистые активы</span><b>' + Calc.fmtUZS(total) + nwChange(s.cur, s.prev) + '</b></div></div>';
+  const parts = Calc.NW_MANUAL.concat(["Investing", "Debt+"]).map(k => ({ name: NW_LABELS[k] || k, sum: Calc.num(f[k]) })).filter(p => p.sum > 0);
+  const assets = parts.reduce((a, p) => a + p.sum, 0);
+  parts.forEach(p => { p.share = assets ? p.sum / assets * 100 : 0; });
+  parts.sort((a, b) => b.sum - a.sum);
+  const colors = parts.map((p, i) => PIE_FALLBACK[i % PIE_FALLBACK.length]);
+  if(parts.length){ h += '<div class="lbl">Из чего состоит</div>' + pieSVG(parts, colors, assets) + catRowsHTML(parts, colors); }
+  else h += '<div class="state">Заполните суммы на вкладке «' + esc(tableTitle(s.table)) + '».</div>';
+  if(Calc.num(f["Debt-"])) h += '<div class="kv"><span>Я должен</span><b class="neg">−' + Calc.fmtUZS(Calc.num(f["Debt-"])) + '</b></div>';
+  const hist = s.snaps.slice(-6).reverse();
+  if(hist.length > 1) h += '<div class="lbl" style="margin-top:14px">Снимки</div><div class="ops">'
+    + hist.map(x => '<div><span>' + fmtDate(x.date) + '</span><b>' + fmtN(Calc.nwTotal(x.fields)) + '</b></div>').join("") + '</div>';
+  box.innerHTML = h;
+}
 function hasData(){ return data.loadedAt > 0; }
 function monthShort(key){ return Calc.MONTHS_RU[+key.slice(5) - 1].slice(0, 3).toLowerCase(); }
 
@@ -1154,7 +1299,8 @@ function staticRow(r){
   if(planned) h += '<div class="bar"><i class="' + (diff > 0 ? "over" : "") + '" style="width:' + Math.min(100, r.price / r.plan * 100).toFixed(1) + '%"></i></div>';
   if(open){
     h += '<div class="edit">'
-      + '<div class="lbl">Добавить трату к факту</div><input class="txt" data-k="add" inputmode="decimal" placeholder="0" autocomplete="off">'
+      + '<div class="two"><div><div class="lbl">Добавить трату</div><input class="txt" data-k="add" inputmode="decimal" placeholder="0" autocomplete="off"></div>'
+      + '<div><div class="lbl">Что купили</div><input class="txt" data-k="note" placeholder="необязательно" autocomplete="off"></div></div>'
       + '<div class="two"><div><div class="lbl">План (Static)</div><input class="txt" data-k="plan" inputmode="decimal" value="' + (r.plan ? groupAmount(r.plan) : "") + '"></div>'
       + '<div><div class="lbl">Факт (Price)</div><input class="txt" data-k="fact" inputmode="decimal" value="' + (r.price ? groupAmount(r.price) : "") + '"></div></div>'
       + '<div class="lbl">Описание</div><input class="txt" data-k="desc" value="' + esc(r.desc) + '" autocomplete="off">'
@@ -1175,10 +1321,9 @@ async function saveStatic(id, btn){
   const patch = {};
   let newFact = fact === null ? 0 : fact;
   let desc = v("desc").trim();
-  if(add){
-    newFact += add;
-    if(desc === r.desc && m.desc) desc = staticDescAfterAdd(r.desc, "").desc;   // same "Nx" counter as the main form
-  }
+  if(add) newFact += add;
+  const note = v("note").trim();
+  if(note && m.desc) desc = Calc.mergeStaticDesc(desc, note);   // same item list / "2x" rule as the main form
   if(m.price && newFact !== r.price) patch[m.price.name] = newFact;
   const planChanged = m.plan && (plan || 0) !== r.plan;
   if(planChanged) patch[m.plan.name] = plan || 0;
@@ -1321,6 +1466,7 @@ $("#statsBody").addEventListener("click", e => {
 /* ---- per-tab statistics: each tab gets stats for its own table ---- */
 function tabKind(t){
   if(!t) return "generic";
+  if(/net\s*-?\s*worth/i.test(t.name)) return "networth";
   if(/expense/i.test(t.name)) return "exp";
   if(/income/i.test(t.name)) return "inc";
   if(/invest/i.test(t.name)) return /goal/i.test(t.name) ? "goals" : "invest";
@@ -1342,6 +1488,7 @@ function renderStats(){
   if(!t) return;
   if(ui.statsTab === "invest") return renderInvestStats(t);
   if(ui.statsTab === "goals") return renderGoalStats(t);
+  if(ui.statsTab === "networth") return renderNetworthStats();
   return renderGenericStats(t);
 }
 

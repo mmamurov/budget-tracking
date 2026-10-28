@@ -141,6 +141,85 @@ function goalProgress(target, saved){
   return { status: left === 0 ? "done" : "progress", target, saved, left, pct: Math.max(0, Math.min(100, saved / target * 100)) };
 }
 
+/* Static row description = comma-separated items; a repeated item gets a counter instead of
+   being written again: "Uyga bozorlik" + "Non" → "Uyga bozorlik, Non"; + "non" → "Uyga bozorlik, Non 2x".
+   Commas inside parentheses ("Uztelecom (2 number, home internet)") belong to one item. */
+const ITEM_RE = /^(.*?\S)\s*(\d+)\s*[xх×]$/i;   // Latin x, Cyrillic х, ×
+function splitItems(s){
+  const out = []; let cur = "", depth = 0;
+  for(const ch of String(s || "")){
+    if(ch === "(") depth++;
+    if(ch === ")") depth = Math.max(0, depth - 1);
+    if(ch === "," && !depth){ out.push(cur); cur = ""; } else cur += ch;
+  }
+  out.push(cur);
+  return out.map(x => x.trim()).filter(Boolean).map(x => {
+    const m = x.match(ITEM_RE);
+    return m ? { name: m[1].trim(), count: parseInt(m[2], 10) || 1 } : { name: x, count: 1 };
+  });
+}
+function mergeStaticDesc(oldDesc, note){
+  const added = splitItems(note);
+  if(!added.length) return String(oldDesc || "").trim();     // nothing to add → description untouched
+  const key = s => s.toLowerCase().replace(/\s+/g, " ");
+  const items = splitItems(oldDesc);
+  added.forEach(n => {
+    const ex = items.find(i => key(i.name) === key(n.name));
+    if(ex) ex.count += n.count; else items.push({ name: n.name, count: n.count });
+  });
+  return items.map(i => i.count > 1 ? i.name + " " + i.count + "x" : i.name).join(", ");
+}
+/* Several static rows can share a category (Home: "Nafaqa" with Tag Maftuna, "Uyga bozorlik" without).
+   Same Tag as the form wins; with no Tag chosen, rows without a Tag win; then the bigger plan (Static). */
+function pickStaticRecord(recs, tag){
+  if(!recs || !recs.length) return null;
+  const t = v => String(v || "").trim().toLowerCase();
+  const pool = tag ? recs.filter(r => t(r.fields.Tag) === t(tag)) : recs.filter(r => !t(r.fields.Tag));
+  return (pool.length ? pool : recs).slice()
+    .sort((a, b) => (Number(b.fields.Static) || 0) - (Number(a.fields.Static) || 0))[0];
+}
+
+/* ---- 💎 Networth: one row per monthly snapshot, one column per type ----
+   Manual columns are carried over from the previous snapshot; auto columns come from other tables. */
+const NW_MANUAL = ["Cash", "Cards", "Savings", "Gold", "Property"];
+const NW_CARRY = NW_MANUAL.concat(["USD rate"]);
+const NW_GOLD = /gold|oltin|золот/i;   // gold is valued by hand in the Gold column, not at purchase cost from Investing
+function nwTotal(f){
+  return NW_MANUAL.concat(["Investing", "Debt+"]).reduce((s, k) => s + num(f[k]), 0) - num(f["Debt-"]);
+}
+/* Investing column = invested + profit of the Investing ledger, without gold */
+function nwInvesting(ledger){ return Math.round(investSummary(ledger.filter(r => !NW_GOLD.test(r.cat || ""))).total); }
+/* Debt tracker rows {type:"Qarz berdim"|"Qarz oldim", status, som, usd}. Repaid ("Qaytib keldi") rows are skipped.
+   Dollar amounts need a rate; without one they are reported in usdOpen instead of being guessed. */
+function debtTotals(rows, rate){
+  let plus = 0, minus = 0, usdOpen = 0;
+  rows.forEach(r => {
+    if(/qaytib\s*keldi/i.test(r.status || "")) return;
+    const lent = /berdim/i.test(r.type || ""), borrowed = /oldim/i.test(r.type || "");
+    if(!lent && !borrowed) return;
+    let amt = num(r.som);
+    if(num(r.usd)){ if(rate > 0) amt += num(r.usd) * rate; else usdOpen += num(r.usd); }
+    if(lent) plus += amt; else minus += amt;
+  });
+  return { plus: Math.round(plus), minus: Math.round(minus), usdOpen };
+}
+/* What to write for the current month: update the auto columns of this month's snapshot,
+   or create it (manual columns copied from the latest earlier snapshot). Never touches older rows. */
+function nwSnapshotPlan(snaps, key, auto, carry){
+  const dated = snaps.filter(s => s.date).sort((a, b) => a.date.localeCompare(b.date));
+  const cur = dated.filter(s => s.date.slice(0, 7) === key).pop();
+  if(cur){
+    const fields = {};
+    Object.keys(auto).forEach(k => { if(num(cur.fields[k]) !== num(auto[k])) fields[k] = auto[k]; });
+    return Object.keys(fields).length ? { action: "update", id: cur.id, fields } : { action: "none", id: cur.id };
+  }
+  const prev = dated.filter(s => s.date.slice(0, 7) < key).pop();
+  const fields = {};
+  (carry || []).forEach(k => { if(prev && prev.fields[k] != null) fields[k] = prev.fields[k]; });
+  Object.assign(fields, auto);
+  return { action: "create", fields };
+}
+
 /* Sunrise / sunset for a date and place (standard sunrise equation, ±2 min).
    Returns Date objects; {polar:"day"|"night"} when the sun never sets / rises. */
 function sunTimes(date, lat, lng){
@@ -189,7 +268,8 @@ function fmtPct(p){
 }
 
 const Calc = { MONTHS_EN, MONTHS_RU, NO_CAT, num, ym, shiftMonth, monthLabel, monthKeyOf, isStatic,
-  staticSummary, totals, change, history, byCategory, groupSum, investSummary, goalProgress, sunTimes, sunTheme, fmtUZS, fmtSigned, fmtShort, fmtPct };
+  staticSummary, totals, change, history, byCategory, groupSum, investSummary, goalProgress, splitItems, mergeStaticDesc, pickStaticRecord,
+  NW_MANUAL, NW_CARRY, nwTotal, nwInvesting, debtTotals, nwSnapshotPlan, sunTimes, sunTheme, fmtUZS, fmtSigned, fmtShort, fmtPct };
 root.Calc = Calc;
 if(typeof module !== "undefined" && module.exports) module.exports = Calc;
 })(typeof window !== "undefined" ? window : globalThis);

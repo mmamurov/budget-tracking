@@ -1,4 +1,4 @@
-const CACHE = "expenses-v13";
+const CACHE = "expenses-v14";
 const SHELL = ["./", "./index.html", "./calc.js", "./quotes.js", "./autolinks.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {

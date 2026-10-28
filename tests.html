@@ -159,6 +159,60 @@ eq("after sunset next flip = tomorrow's sunrise", hm(night.next) < "07:10" && ni
 eq("before sunrise next flip = today's sunrise", Calc.sunTheme(new Date("2026-10-22T00:00:00Z"), ...TAS).next.valueOf(), st.sunrise.valueOf());
 eq("polar night handled", Calc.sunTheme(new Date("2026-12-21T12:00:00Z"), 78.2, 15.6).theme, "dark");
 
+/* --- static row descriptions: items separated by commas, repeats counted --- */
+let dsc = "Uyga bozorlik";
+dsc = Calc.mergeStaticDesc(dsc, "Non");            eq("Home: new item appended", dsc, "Uyga bozorlik, Non");
+dsc = Calc.mergeStaticDesc(dsc, "Go'sht");         eq("Home: second item appended", dsc, "Uyga bozorlik, Non, Go'sht");
+dsc = Calc.mergeStaticDesc(dsc, "non");            eq("repeat (any case) → 2x, not written again", dsc, "Uyga bozorlik, Non 2x, Go'sht");
+dsc = Calc.mergeStaticDesc(dsc, "  Non ");         eq("third time → 3x", dsc, "Uyga bozorlik, Non 3x, Go'sht");
+let car = Calc.mergeStaticDesc("Fuel", "Бензин");
+car = Calc.mergeStaticDesc(car, "бензин");         eq("Car: Бензин twice → Бензин 2x", car, "Fuel, Бензин 2x");
+eq("Cyrillic х counter understood", Calc.mergeStaticDesc("Fuel, Бензин 2х", "Бензин"), "Fuel, Бензин 3x");
+eq("several items in one entry", Calc.mergeStaticDesc("Uyga bozorlik, Non", "non, sut"), "Uyga bozorlik, Non 2x, sut");
+eq("empty note → description untouched", Calc.mergeStaticDesc("Daily ehson", ""), "Daily ehson");
+eq("empty row → note becomes the description", Calc.mergeStaticDesc("", "Dorilar"), "Dorilar");
+eq("comma inside parentheses is one item", Calc.mergeStaticDesc("Uztelecom (2 number, home internet)", "Beeline"), "Uztelecom (2 number, home internet), Beeline");
+eq("same as the row name → 2x", Calc.mergeStaticDesc("Haircut", "haircut"), "Haircut 2x");
+eq("numbers without x are part of the name", Calc.mergeStaticDesc("iPhone 15", "iPhone 15"), "iPhone 15 2x");
+
+/* --- which static row receives the payment when a category has several --- */
+const HR = (id, plan, tag) => ({ id, fields: Object.assign({ Static: plan }, tag ? { Tag: tag } : {}) });
+const home = [HR("nafaqa", 1000000, "Maftuna"), HR("bozorlik", 3000000)];
+eq("Home without Tag → Uyga bozorlik (no tag)", Calc.pickStaticRecord(home, null).id, "bozorlik");
+eq("Home with Tag Maftuna → Nafaqa", Calc.pickStaticRecord(home, "Maftuna").id, "nafaqa");
+eq("unknown Tag → bigger plan", Calc.pickStaticRecord(home, "Food").id, "bozorlik");
+eq("single row → that row", Calc.pickStaticRecord([HR("fuel", 1500000)], null).id, "fuel");
+eq("no rows → null (new row is created)", Calc.pickStaticRecord([], null), null);
+
+/* --- 💎 Networth --- */
+eq("Investing for networth = Investing without gold (real ledger)", Calc.nwInvesting(inv), 117568639);
+const debts = [
+  { type: "Qarz berdim", status: "Qaytib keldi", usd: 100 },                 // real row: repaid → ignored
+  { type: "Qarz berdim", status: "Hali qaytarilmadi", som: 2000000 },
+  { type: "Qarz berdim", status: "Hali qaytarilmadi", usd: 50 },
+  { type: "Qarz oldim", status: "Hali qaytarilmadi", som: 500000 },
+  { type: "Qarz oldim", som: 100000 }                                         // no status yet → still open
+];
+eq("debts with rate", Calc.debtTotals(debts, 12800), { plus: 2640000, minus: 600000, usdOpen: 0 });
+eq("debts without rate → $ reported, not guessed", Calc.debtTotals(debts, 0), { plus: 2000000, minus: 600000, usdOpen: 50 });
+eq("real Debt tracker today → 0 / 0", Calc.debtTotals([debts[0]], 12800), { plus: 0, minus: 0, usdOpen: 0 });
+eq("total = assets + Debt+ − Debt-", Calc.nwTotal({ Cash: 1000, Cards: 2000, Savings: 0, Gold: 500, Property: 0, Investing: 10000, "Debt+": 300, "Debt-": 800 }), 13000);
+eq("empty snapshot total = 0", Calc.nwTotal({}), 0);
+const AUTO = { Investing: 117568639, "Debt+": 0, "Debt-": 0 };
+const snapsA = [
+  { id: "aug", date: "2026-08-31", fields: { Cash: 1, Cards: 1, "USD rate": 12500 } },
+  { id: "sep", date: "2026-09-30", fields: { Cash: 3000000, Cards: 5000000, Gold: 18000000, "USD rate": 12700, Notes: "x", Investing: 100 } }
+];
+eq("no snapshot this month → create, manual columns carried from the latest one",
+  Calc.nwSnapshotPlan(snapsA, "2026-10", AUTO, Calc.NW_CARRY),
+  { action: "create", fields: { Cash: 3000000, Cards: 5000000, Gold: 18000000, "USD rate": 12700, Investing: 117568639, "Debt+": 0, "Debt-": 0 } });
+eq("first snapshot ever → only auto columns", Calc.nwSnapshotPlan([], "2026-10", AUTO, Calc.NW_CARRY), { action: "create", fields: AUTO });
+const snapsB = snapsA.concat([{ id: "oct", date: "2026-10-28", fields: { Cash: 4000000, Investing: 117000000, "Debt+": 0, "Debt-": 0 } }]);
+eq("snapshot exists → update only changed auto columns", Calc.nwSnapshotPlan(snapsB, "2026-10", AUTO, Calc.NW_CARRY), { action: "update", id: "oct", fields: { Investing: 117568639 } });
+const snapsC = snapsA.concat([{ id: "oct", date: "2026-10-28", fields: AUTO }]);
+eq("re-run with same values → nothing written", Calc.nwSnapshotPlan(snapsC, "2026-10", AUTO, Calc.NW_CARRY), { action: "none", id: "oct" });
+eq("manual edits of this month are never overwritten", JSON.stringify(Calc.nwSnapshotPlan(snapsB, "2026-10", AUTO, Calc.NW_CARRY)).includes("Cash"), false);
+
 /* --- module quotes: real Airtable table names (with emoji) → source --- */
 const qsrc = n => (Quotes.quoteFor(n) || {}).src || null;
 eq("Expenses quote", qsrc("💸 Expenses"), "Коран, 17:26");
